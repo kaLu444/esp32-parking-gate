@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "devices": {
+      "$deviceId": {
+        ".read": true,
+        ".write": true,
+        "commands": {
+          ".indexOn": ["timestamp"]
+        }
+      }
+    }
+  }
+}
