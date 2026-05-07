@@ -1,11 +1,11 @@
 // Firebase konfiguracija za web aplikaciju.
 // Vrednosti kopiraj iz Firebase Console: Project settings > Your apps > Web app.
 export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDPnzM8FXSo1pTyvv4PLJw-sAgKePpDTZE",
+  authDomain: "esp32-parking-gate.firebaseapp.com",
+  databaseURL: "https://esp32-parking-gate-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "esp32-parking-gate",
+  storageBucket: "esp32-parking-gate.firebasestorage.app",
+  messagingSenderId: "699153779863",
+  appId: "1:699153779863:web:b8872657de4828248f2dd2"
 };
