@@ -127,14 +127,29 @@ U Arduino IDE instaliraj:
 - `ESP32Servo`
 - `ArduinoJson`
 
-Otvori `esp32_control/esp32_control.ino` i popuni:
+Za lokalne WiFi/Firebase podatke koristi `secrets.h`, da sifra ne ode na GitHub.
+
+1. Kopiraj primer:
+
+```powershell
+Copy-Item esp32_control/secrets.example.h esp32_control/secrets.h
+```
+
+2. U `esp32_control/secrets.h` popuni:
 
 ```cpp
 const char* WIFI_SSID = "IME_WIFI_MREZE";
 const char* WIFI_PASSWORD = "WIFI_LOZINKA";
 const char* DATABASE_URL = "https://PROJECT_ID-default-rtdb.europe-west1.firebasedatabase.app";
+```
+
+3. Device ID ostaje u `esp32_control/esp32_control.ino`:
+
+```cpp
 const char* DEVICE_ID = "esp32_1";
 ```
+
+Fajl `esp32_control/secrets.h` je dodat u `.gitignore`, pa ostaje samo na tvom racunaru.
 
 ESP32 koristi ove glavne putanje:
 

@@ -6,14 +6,11 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 
+#include "secrets.h"
+
 // ------------------------------------------------------------
 // PODESAVANJA KOJA SE MENJAJU ZA TVOJ PROJEKAT
 // ------------------------------------------------------------
-const char* WIFI_SSID = "UNESI_WIFI_SSID";
-const char* WIFI_PASSWORD = "UNESI_WIFI_LOZINKU";
-
-// Primer: https://tvoj-projekat-default-rtdb.europe-west1.firebasedatabase.app
-const char* DATABASE_URL = "UNESI_FIREBASE_DATABASE_URL";
 const char* DEVICE_ID = "esp32_1";
 
 // ------------------------------------------------------------
