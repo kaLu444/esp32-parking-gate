@@ -16,29 +16,33 @@ import { firebaseConfig } from "./firebase-config.js";
 
 const commandDefinitions = [
   {
-    name: "gate.position",
-    value: "open",
-    label: "Otvori rampu",
-    description: "Dozvoli prolaz",
+    id: "allowAccess",
+    name: "gate.access",
+    value: "allow",
+    label: "Dozvoli prolaz",
+    description: "Odobri prolaz",
     icon: "arrow-up",
-    tone: "success"
+    tone: "success",
+    requiresVehicle: true
   },
   {
+    id: "denyAccess",
     name: "gate.access",
     value: "deny",
     label: "Zabrani prolaz",
     description: "Blokiraj prolaz",
     icon: "hand",
-    tone: "danger"
+    tone: "danger",
+    requiresVehicle: true
   },
   {
-    name: "gate.access",
-    value: "allow",
-    label: "Privremeno otvori",
-    description: "Otvori na podeseno vreme",
+    id: "toggleGate",
+    name: "gate.position",
+    value: "toggle",
+    label: "Otvori rampu",
+    description: "Otvori / zatvori",
     icon: "clock",
-    tone: "primary",
-    includeDuration: true
+    tone: "primary"
   }
 ];
 
@@ -51,7 +55,10 @@ const elements = {
   connectButton: document.querySelector("#connectButton"),
   commandGrid: document.querySelector("#commandGrid"),
   commandLog: document.querySelector("#commandLog"),
+  allCommandLog: document.querySelector("#allCommandLog"),
   toggleActivitiesButton: document.querySelector("#toggleActivitiesButton"),
+  activitiesModal: document.querySelector("#activitiesModal"),
+  closeActivitiesModal: document.querySelector("#closeActivitiesModal"),
   activityCard: document.querySelector(".activity-card"),
   gateState: document.querySelector("#gateState"),
   gateSubtitle: document.querySelector("#gateSubtitle"),
@@ -77,7 +84,11 @@ let db;
 let activeDeviceId = elements.deviceIdInput.value.trim();
 let activeUnsubscribers = [];
 let recentCommands = [];
-let showAllActivities = false;
+let latestState = null;
+let currentGateOpen = false;
+let currentHasVehicle = false;
+
+const ESP_ONLINE_STALE_MS = 8000;
 
 function hasFirebaseConfig() {
   const requiredKeys = ["apiKey", "authDomain", "databaseURL", "projectId", "appId"];
@@ -99,12 +110,27 @@ function setConnectionStatus(message, state = "warning") {
   elements.connectionStatus.classList.add(`is-${state}`);
 }
 
-function setOnlineState(isOnline) {
-  setConnectionStatus(isOnline ? "Online veza" : "Offline", isOnline ? "online" : "warning");
-  elements.sceneConnection.textContent = isOnline ? "Online veza" : "Offline";
-  elements.sceneConnection.classList.toggle("is-online", isOnline);
-  elements.connectionMetric.textContent = isOnline ? "Online" : "Offline";
-  elements.connectionDetail.textContent = isOnline ? "Stabilna veza" : "Ceka se Firebase";
+function isEspStateFresh(state) {
+  return typeof state?.updatedAt === "number" && Date.now() - state.updatedAt <= ESP_ONLINE_STALE_MS;
+}
+
+function isEspOnline(state) {
+  return Boolean(state?.online) && isEspStateFresh(state);
+}
+
+function renderEspConnection(state) {
+  const online = isEspOnline(state);
+  const hasState = Boolean(state);
+
+  setConnectionStatus(online ? "ESP32 online" : "ESP32 offline", online ? "online" : "warning");
+  elements.sceneConnection.textContent = online ? "Online veza" : "Offline";
+  elements.sceneConnection.classList.toggle("is-online", online);
+  elements.connectionMetric.textContent = online ? "Online" : "Offline";
+  elements.connectionDetail.textContent = online
+    ? "ESP32 salje stanje"
+    : hasState
+      ? `Zadnje stanje: ${formatClock(state.updatedAt)}`
+      : "Ceka se ESP32";
 }
 
 function devicePath(childPath = "") {
@@ -207,22 +233,51 @@ function getCommandPresentation(command) {
   };
 }
 
+function resolveCommand(command) {
+  if (command.id !== "toggleGate") {
+    return command;
+  }
+
+  const shouldClose = currentGateOpen;
+  return {
+    ...command,
+    value: shouldClose ? "close" : "open",
+    label: shouldClose ? "Zatvori rampu" : "Otvori rampu",
+    description: shouldClose ? "Spusti rampu" : "Podigni rampu",
+    icon: shouldClose ? "arrow-down" : "arrow-up"
+  };
+}
+
+function canUseCommand(command) {
+  if (!db) {
+    return false;
+  }
+
+  return !command.requiresVehicle || currentHasVehicle;
+}
+
 function renderCommandButtons() {
   elements.commandGrid.innerHTML = commandDefinitions
-    .map((command, index) => `
-      <button class="action-button" data-command-index="${index}" data-tone="${command.tone}" type="button" ${db ? "" : "disabled"}>
+    .map((baseCommand, index) => {
+      const command = resolveCommand(baseCommand);
+      const disabled = canUseCommand(baseCommand) ? "" : "disabled";
+      const title = baseCommand.requiresVehicle && !currentHasVehicle ? "Dostupno kada senzor detektuje vozilo" : "";
+
+      return `
+      <button class="action-button" data-command-index="${index}" data-tone="${command.tone}" type="button" title="${title}" ${disabled}>
         <span class="action-icon"><i data-lucide="${command.icon}" aria-hidden="true"></i></span>
         <span>
           <strong>${command.label}</strong>
           <span>${command.description}</span>
         </span>
       </button>
-    `)
+    `;
+    })
     .join("");
 
   elements.commandGrid.querySelectorAll("[data-command-index]").forEach((button) => {
     button.addEventListener("click", () => {
-      const command = commandDefinitions[Number(button.dataset.commandIndex)];
+      const command = resolveCommand(commandDefinitions[Number(button.dataset.commandIndex)]);
       sendCommand(command);
     });
   });
@@ -233,6 +288,10 @@ function renderCommandButtons() {
 async function sendCommand(command) {
   if (!db) {
     setConnectionStatus("Unesi Firebase config", "error");
+    return;
+  }
+
+  if (command.requiresVehicle && !currentHasVehicle) {
     return;
   }
 
@@ -251,7 +310,6 @@ async function sendCommand(command) {
     }
 
     await set(commandRef, payload);
-    setConnectionStatus(`Poslato: ${command.label}`, "online");
   } catch (error) {
     console.error(error);
     setConnectionStatus("Slanje nije uspelo", "error");
@@ -259,7 +317,11 @@ async function sendCommand(command) {
 }
 
 function renderState(state) {
+  latestState = state;
+
   if (!state) {
+    currentGateOpen = false;
+    currentHasVehicle = false;
     elements.gateState.textContent = "--";
     elements.gateState.classList.remove("is-open");
     elements.gateSubtitle.textContent = "Nema podataka";
@@ -273,6 +335,8 @@ function renderState(state) {
     elements.buzzerState.textContent = "--";
     elements.lastUpdate.textContent = "--";
     elements.lastCommandValue.textContent = "--";
+    renderEspConnection(null);
+    renderCommandButtons();
     refreshIcons();
     return;
   }
@@ -284,6 +348,8 @@ function renderState(state) {
     ? state.carPresent
     : typeof state.distanceCm === "number" && state.distanceCm > 0;
 
+  currentGateOpen = isGateOpen;
+  currentHasVehicle = hasVehicle;
   elements.gateState.textContent = isGateOpen ? "Otvorena" : "Zatvorena";
   elements.gateState.classList.toggle("is-open", isGateOpen);
   elements.gateSubtitle.textContent = isGateOpen ? "Rampa je podignuta" : "Rampa je spustena";
@@ -300,6 +366,8 @@ function renderState(state) {
 
   const lastCommand = state.lastProcessedCommand || {};
   elements.lastCommandValue.textContent = `${formatValue(lastCommand.name)} / ${formatValue(lastCommand.value)}`;
+  renderEspConnection(state);
+  renderCommandButtons();
   refreshIcons();
 }
 
@@ -321,20 +389,12 @@ function renderConfig(config) {
   }
 }
 
-function renderCommandLog() {
-  if (!recentCommands.length) {
-    elements.commandLog.innerHTML = `<div class="empty-state">Jos nema aktivnosti.</div>`;
-    elements.toggleActivitiesButton.disabled = true;
-    refreshIcons();
-    return;
+function renderActivityRows(commands) {
+  if (!commands.length) {
+    return `<div class="empty-state">Jos nema aktivnosti.</div>`;
   }
 
-  elements.toggleActivitiesButton.disabled = recentCommands.length <= 7;
-  elements.toggleActivitiesButton.textContent = showAllActivities ? "Prikazi 7" : "Pogledaj sve";
-  elements.activityCard.classList.toggle("show-all", showAllActivities);
-
-  const visibleCommands = showAllActivities ? recentCommands : recentCommands.slice(0, 7);
-  elements.commandLog.innerHTML = visibleCommands
+  return commands
     .map((command) => {
       const presentation = getCommandPresentation(command);
       return `
@@ -351,8 +411,31 @@ function renderCommandLog() {
       `;
     })
     .join("");
+}
+
+function renderCommandLog() {
+  elements.commandLog.innerHTML = renderActivityRows(recentCommands.slice(0, 7));
+  elements.toggleActivitiesButton.disabled = false;
+  elements.toggleActivitiesButton.textContent = "Pogledaj sve";
+  renderAllCommandLog();
 
   refreshIcons();
+}
+
+function renderAllCommandLog() {
+  elements.allCommandLog.innerHTML = renderActivityRows(recentCommands);
+}
+
+function openActivitiesModal() {
+  renderAllCommandLog();
+  elements.activitiesModal.hidden = false;
+  document.body.classList.add("modal-open");
+  refreshIcons();
+}
+
+function closeActivitiesModal() {
+  elements.activitiesModal.hidden = true;
+  document.body.classList.remove("modal-open");
 }
 
 function detachListeners() {
@@ -377,13 +460,16 @@ function connectToDevice() {
 
   activeDeviceId = nextDeviceId;
   detachListeners();
-  showAllActivities = false;
+  latestState = null;
+  currentGateOpen = false;
+  currentHasVehicle = false;
+  renderEspConnection(null);
+  renderCommandButtons();
 
   const stateRef = ref(db, devicePath("state"));
   const configRef = ref(db, devicePath("config"));
-  const commandsRef = query(ref(db, devicePath("commands")), orderByChild("timestamp"), limitToLast(20));
+  const commandsRef = query(ref(db, devicePath("commands")), orderByChild("timestamp"), limitToLast(50));
   const todayCommandsRef = query(ref(db, devicePath("commands")), orderByChild("timestamp"), startAt(getDayStartTimestamp()));
-  const connectedRef = ref(db, ".info/connected");
 
   listen(stateRef, (snapshot) => renderState(snapshot.val()));
   listen(configRef, (snapshot) => renderConfig(snapshot.val()));
@@ -401,7 +487,6 @@ function connectToDevice() {
     const commands = value ? Object.values(value) : [];
     elements.todayCommandCount.textContent = String(commands.filter((command) => isToday(command.timestamp)).length);
   });
-  listen(connectedRef, (snapshot) => setOnlineState(Boolean(snapshot.val())));
 }
 
 async function saveConfig(event) {
@@ -421,7 +506,6 @@ async function saveConfig(event) {
       updatedBy: "web"
     });
 
-    setConnectionStatus("Config sacuvan", "online");
   } catch (error) {
     console.error(error);
     setConnectionStatus("Config nije sacuvan", "error");
@@ -433,10 +517,19 @@ function init() {
   renderCommandLog();
   elements.connectButton.addEventListener("click", connectToDevice);
   elements.configForm.addEventListener("submit", saveConfig);
-  elements.toggleActivitiesButton.addEventListener("click", () => {
-    showAllActivities = !showAllActivities;
-    renderCommandLog();
+  elements.toggleActivitiesButton.addEventListener("click", openActivitiesModal);
+  elements.closeActivitiesModal.addEventListener("click", closeActivitiesModal);
+  elements.activitiesModal.addEventListener("click", (event) => {
+    if (event.target === elements.activitiesModal) {
+      closeActivitiesModal();
+    }
   });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.activitiesModal.hidden) {
+      closeActivitiesModal();
+    }
+  });
+  window.setInterval(() => renderEspConnection(latestState), 3000);
 
   if (!hasFirebaseConfig()) {
     setConnectionStatus("Unesi Firebase config", "error");
@@ -446,6 +539,7 @@ function init() {
   try {
     app = initializeApp(firebaseConfig);
     db = getDatabase(app);
+    setConnectionStatus("Ceka ESP32", "warning");
     renderCommandButtons();
     connectToDevice();
   } catch (error) {

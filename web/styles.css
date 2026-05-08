@@ -55,18 +55,18 @@ button:disabled {
 
 .app-shell {
   height: 100vh;
-  min-height: 700px;
+  min-height: 650px;
   display: flex;
   flex-direction: column;
 }
 
 .topbar {
-  min-height: 92px;
+  min-height: 72px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 22px 32px 18px;
+  gap: 20px;
+  padding: 12px 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
@@ -77,26 +77,26 @@ button:disabled {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
 }
 
 .brand h1 {
   margin: 0;
-  font-size: clamp(1.7rem, 2vw, 2.45rem);
+  font-size: clamp(1.55rem, 1.85vw, 2.2rem);
   line-height: 1.05;
   font-weight: 900;
   letter-spacing: 0;
 }
 
 .logo-mark {
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
   border-radius: 8px;
   background: linear-gradient(145deg, #1d7df2, #1857d7);
   color: #ffffff;
-  font-size: 1.55rem;
+  font-size: 1.42rem;
   font-weight: 900;
   box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
   flex: 0 0 auto;
@@ -113,8 +113,8 @@ button:disabled {
 }
 
 .icon-button {
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   color: var(--muted);
@@ -123,7 +123,7 @@ button:disabled {
 
 .connection-controls {
   display: grid;
-  grid-template-columns: 230px auto 230px;
+  grid-template-columns: 220px auto 220px;
   align-items: end;
   gap: 12px;
   flex: 0 0 auto;
@@ -141,7 +141,7 @@ button:disabled {
 .device-field input,
 .field input {
   width: 100%;
-  min-height: 48px;
+  min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0 14px;
@@ -158,7 +158,7 @@ button:disabled {
 }
 
 .secondary-button {
-  min-height: 48px;
+  min-height: 42px;
   padding: 0 24px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -166,7 +166,7 @@ button:disabled {
 }
 
 .primary-button {
-  min-height: 50px;
+  min-height: 44px;
   padding: 0 18px;
   background: var(--ink);
   color: #ffffff;
@@ -177,7 +177,7 @@ button:disabled {
 }
 
 .connection-pill {
-  min-height: 48px;
+  min-height: 42px;
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
@@ -212,8 +212,8 @@ button:disabled {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(520px, 1.45fr) minmax(320px, 0.62fr) minmax(360px, 0.72fr);
-  gap: 22px;
-  padding: 26px 32px 26px;
+  gap: 18px;
+  padding: 18px 24px 18px;
   overflow: hidden;
 }
 
@@ -222,7 +222,7 @@ button:disabled {
 .right-column {
   min-height: 0;
   display: grid;
-  gap: 22px;
+  gap: 18px;
 }
 
 .left-column {
@@ -230,7 +230,7 @@ button:disabled {
 }
 
 .middle-column {
-  grid-template-rows: minmax(500px, 1fr) minmax(272px, 0.52fr);
+  grid-template-rows: minmax(420px, 1fr) minmax(286px, 0.52fr);
 }
 
 .right-column {
@@ -526,7 +526,7 @@ button:disabled {
 .stats-grid {
   min-height: 0;
   display: grid;
-  gap: 22px;
+  gap: 18px;
 }
 
 .bottom-grid {
@@ -539,7 +539,7 @@ button:disabled {
 .settings-card,
 .activity-card,
 .stat-card {
-  padding: 24px;
+  padding: 20px;
 }
 
 h2 {
@@ -709,7 +709,7 @@ h2 {
 .gate-card {
   display: grid;
   grid-template-rows: auto auto auto 1fr;
-  gap: 16px;
+  gap: 12px;
   overflow: hidden;
 }
 
@@ -720,8 +720,8 @@ h2 {
 }
 
 .status-orb {
-  width: 96px;
-  height: 96px;
+  width: 82px;
+  height: 82px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -736,14 +736,14 @@ h2 {
 }
 
 .status-orb svg {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
 }
 
 .gate-status strong {
   display: block;
   color: var(--red);
-  font-size: 1.68rem;
+  font-size: 1.5rem;
   line-height: 1.1;
   font-weight: 950;
 }
@@ -766,11 +766,11 @@ h2 {
 .action-stack {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 10px;
 }
 
 .action-button {
-  min-height: 78px;
+  min-height: 68px;
   width: 100%;
   display: grid;
   grid-template-columns: 56px 1fr;
@@ -778,7 +778,7 @@ h2 {
   gap: 14px;
   border: 0;
   border-radius: 8px;
-  padding: 10px 18px;
+  padding: 9px 16px;
   color: #ffffff;
   text-align: left;
   transition: transform 160ms ease, filter 160ms ease;
@@ -801,9 +801,15 @@ h2 {
   background: linear-gradient(145deg, #2f80ff, #1e63dd);
 }
 
+.action-button:disabled {
+  opacity: 0.42;
+  filter: grayscale(0.25);
+  transform: none;
+}
+
 .action-icon {
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
   border: 3px solid rgba(255, 255, 255, 0.86);
@@ -811,13 +817,13 @@ h2 {
 }
 
 .action-icon svg {
-  width: 28px;
-  height: 28px;
+  width: 25px;
+  height: 25px;
 }
 
 .action-button strong {
   display: block;
-  font-size: 1.12rem;
+  font-size: 1.05rem;
   line-height: 1.1;
   font-weight: 950;
 }
@@ -825,14 +831,14 @@ h2 {
 .action-button span:last-child {
   display: block;
   margin-top: 5px;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   font-weight: 650;
 }
 
 .settings-card {
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: 18px;
+  gap: 14px;
 }
 
 .config-form {
@@ -848,7 +854,7 @@ h2 {
 }
 
 .toggle-row {
-  min-height: 82px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -862,8 +868,8 @@ h2 {
 }
 
 .toggle-row input {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   accent-color: var(--green);
 }
 
@@ -966,6 +972,47 @@ h2 {
   color: var(--muted);
   border: 1px dashed var(--line);
   border-radius: 8px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.46);
+  backdrop-filter: blur(5px);
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal-panel {
+  width: min(760px, 100%);
+  max-height: min(720px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 16px;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.28);
+  padding: 22px;
+}
+
+.modal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.modal-activity-list {
+  min-height: 260px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
 }
 
 .stats-grid {
@@ -1077,10 +1124,6 @@ svg {
   .brand {
     align-items: flex-start;
     gap: 12px;
-  }
-
-  .menu-button {
-    display: none;
   }
 
   .brand h1 {

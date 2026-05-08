@@ -11,9 +11,6 @@
     <div class="app-shell">
       <header class="topbar">
         <div class="brand">
-          <button class="icon-button menu-button" type="button" aria-label="Meni">
-            <i data-lucide="menu"></i>
-          </button>
           <div class="logo-mark" aria-hidden="true">P</div>
           <h1>Udaljena kontrola parking rampe</h1>
         </div>
@@ -158,6 +155,18 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div class="modal-backdrop" id="activitiesModal" hidden>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="activitiesModalTitle">
+        <div class="modal-heading">
+          <h2 id="activitiesModalTitle">Sve aktivnosti</h2>
+          <button class="icon-button" id="closeActivitiesModal" type="button" aria-label="Zatvori">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="modal-activity-list" id="allCommandLog"></div>
+      </section>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
