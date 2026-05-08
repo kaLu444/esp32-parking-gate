@@ -507,6 +507,13 @@ void openGateTemporary() {
   noTone(Pins::BUZZER);
 }
 
+void openGateManual() {
+  gateServo.write(90);
+  gateOpen = true;
+  gateOpenUntilMs = 0; // Rucno otvorena rampa ostaje otvorena dok ne stigne komanda za zatvaranje.
+  noTone(Pins::BUZZER);
+}
+
 void closeGate() {
   gateServo.write(0);
   gateOpen = false;
@@ -598,7 +605,7 @@ bool handleCommand(const String& commandName, const String& value, const String&
 
   if (normalizedName == "gate.position") {
     if (normalizedValue == "open") {
-      openGateTemporary();
+      openGateManual();
       return true;
     }
 

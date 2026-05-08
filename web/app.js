@@ -19,8 +19,7 @@ const commandDefinitions = [
     id: "allowAccess",
     name: "gate.access",
     value: "allow",
-    label: "Dozvoli prolaz",
-    description: "Odobri prolaz",
+    label: "Dozvoli pristup",
     icon: "arrow-up",
     tone: "success",
     requiresVehicle: true
@@ -29,8 +28,7 @@ const commandDefinitions = [
     id: "denyAccess",
     name: "gate.access",
     value: "deny",
-    label: "Zabrani prolaz",
-    description: "Blokiraj prolaz",
+    label: "Zabrani pristup",
     icon: "hand",
     tone: "danger",
     requiresVehicle: true
@@ -40,7 +38,6 @@ const commandDefinitions = [
     name: "gate.position",
     value: "toggle",
     label: "Otvori rampu",
-    description: "Otvori / zatvori",
     icon: "clock",
     tone: "primary"
   }
@@ -243,7 +240,6 @@ function resolveCommand(command) {
     ...command,
     value: shouldClose ? "close" : "open",
     label: shouldClose ? "Zatvori rampu" : "Otvori rampu",
-    description: shouldClose ? "Spusti rampu" : "Podigni rampu",
     icon: shouldClose ? "arrow-down" : "arrow-up"
   };
 }
@@ -266,10 +262,7 @@ function renderCommandButtons() {
       return `
       <button class="action-button" data-command-index="${index}" data-tone="${command.tone}" type="button" title="${title}" ${disabled}>
         <span class="action-icon"><i data-lucide="${command.icon}" aria-hidden="true"></i></span>
-        <span>
-          <strong>${command.label}</strong>
-          <span>${command.description}</span>
-        </span>
+        <strong>${command.label}</strong>
       </button>
     `;
     })
