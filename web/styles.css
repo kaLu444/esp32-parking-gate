@@ -230,7 +230,7 @@ button:disabled {
 }
 
 .middle-column {
-  grid-template-rows: minmax(360px, 1fr) minmax(300px, 0.7fr);
+  grid-template-rows: minmax(500px, 1fr) minmax(272px, 0.52fr);
 }
 
 .right-column {
@@ -709,18 +709,19 @@ h2 {
 .gate-card {
   display: grid;
   grid-template-rows: auto auto auto 1fr;
-  gap: 20px;
+  gap: 16px;
+  overflow: hidden;
 }
 
 .gate-status {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 18px;
 }
 
 .status-orb {
-  width: 110px;
-  height: 110px;
+  width: 96px;
+  height: 96px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -735,14 +736,14 @@ h2 {
 }
 
 .status-orb svg {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
 }
 
 .gate-status strong {
   display: block;
   color: var(--red);
-  font-size: 1.85rem;
+  font-size: 1.68rem;
   line-height: 1.1;
   font-weight: 950;
 }
@@ -753,8 +754,8 @@ h2 {
 
 .gate-status span {
   display: block;
-  margin-top: 8px;
-  font-size: 1.05rem;
+  margin-top: 6px;
+  font-size: 1rem;
 }
 
 .last-change {
@@ -765,11 +766,11 @@ h2 {
 .action-stack {
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 12px;
 }
 
 .action-button {
-  min-height: 84px;
+  min-height: 78px;
   width: 100%;
   display: grid;
   grid-template-columns: 56px 1fr;
@@ -777,7 +778,7 @@ h2 {
   gap: 14px;
   border: 0;
   border-radius: 8px;
-  padding: 12px 18px;
+  padding: 10px 18px;
   color: #ffffff;
   text-align: left;
   transition: transform 160ms ease, filter 160ms ease;
@@ -801,8 +802,8 @@ h2 {
 }
 
 .action-icon {
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
   border: 3px solid rgba(255, 255, 255, 0.86);
@@ -810,21 +811,21 @@ h2 {
 }
 
 .action-icon svg {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
 }
 
 .action-button strong {
   display: block;
-  font-size: 1.2rem;
+  font-size: 1.12rem;
   line-height: 1.1;
   font-weight: 950;
 }
 
 .action-button span:last-child {
   display: block;
-  margin-top: 6px;
-  font-size: 0.95rem;
+  margin-top: 5px;
+  font-size: 0.9rem;
   font-weight: 650;
 }
 

@@ -161,6 +161,20 @@ function getDistanceText(distanceCm) {
   return String(Math.round(distanceCm));
 }
 
+function clampNumber(value, fallback, min, max) {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, numberValue));
+}
+
+function getGateOpenMs() {
+  return clampNumber(elements.gateOpenMsInput.value, 4000, 1000, 30000);
+}
+
 function getCommandPresentation(command) {
   const name = command.name;
   const value = command.value;
@@ -233,7 +247,7 @@ async function sendCommand(command) {
     };
 
     if (command.includeDuration) {
-      payload.durationMs = Number(elements.gateOpenMsInput.value) || 4000;
+      payload.durationMs = getGateOpenMs();
     }
 
     await set(commandRef, payload);
@@ -295,11 +309,11 @@ function renderConfig(config) {
   }
 
   if (config.detectionDistanceCm) {
-    elements.detectionDistanceInput.value = config.detectionDistanceCm;
+    elements.detectionDistanceInput.value = clampNumber(config.detectionDistanceCm, 25, 5, 200);
   }
 
   if (config.gateOpenMs) {
-    elements.gateOpenMsInput.value = config.gateOpenMs;
+    elements.gateOpenMsInput.value = clampNumber(config.gateOpenMs, 4000, 1000, 30000);
   }
 
   if (typeof config.buzzerEnabled === "boolean") {
@@ -400,8 +414,8 @@ async function saveConfig(event) {
 
   try {
     await update(ref(db, devicePath("config")), {
-      detectionDistanceCm: Number(elements.detectionDistanceInput.value) || 25,
-      gateOpenMs: Number(elements.gateOpenMsInput.value) || 4000,
+      detectionDistanceCm: clampNumber(elements.detectionDistanceInput.value, 25, 5, 200),
+      gateOpenMs: getGateOpenMs(),
       buzzerEnabled: elements.buzzerEnabledInput.checked,
       updatedAt: serverTimestamp(),
       updatedBy: "web"
