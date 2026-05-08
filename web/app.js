@@ -164,11 +164,11 @@ function getDistanceText(distanceCm) {
 function clampNumber(value, fallback, min, max) {
   const numberValue = Number(value);
 
-  if (!Number.isFinite(numberValue)) {
+  if (!Number.isFinite(numberValue) || numberValue < min || numberValue > max) {
     return fallback;
   }
 
-  return Math.min(max, Math.max(min, numberValue));
+  return numberValue;
 }
 
 function getGateOpenMs() {
