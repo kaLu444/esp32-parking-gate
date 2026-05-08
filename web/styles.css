@@ -230,7 +230,7 @@ button:disabled {
 }
 
 .middle-column {
-  grid-template-rows: minmax(420px, 1fr) minmax(286px, 0.52fr);
+  grid-template-rows: minmax(398px, 1fr) minmax(188px, 0.34fr);
 }
 
 .right-column {
@@ -709,7 +709,7 @@ h2 {
 .gate-card {
   display: grid;
   grid-template-rows: auto auto auto 1fr;
-  gap: 12px;
+  gap: 8px;
   overflow: hidden;
 }
 
@@ -720,8 +720,8 @@ h2 {
 }
 
 .status-orb {
-  width: 82px;
-  height: 82px;
+  width: 64px;
+  height: 64px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -736,8 +736,8 @@ h2 {
 }
 
 .status-orb svg {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
 }
 
 .gate-status strong {
@@ -766,14 +766,14 @@ h2 {
 .action-stack {
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .action-button {
-  min-height: 68px;
+  min-height: 54px;
   width: 100%;
   display: grid;
-  grid-template-columns: 42px 1fr;
+  grid-template-columns: 34px 1fr;
   align-items: center;
   gap: 16px;
   border: 0;
@@ -801,6 +801,10 @@ h2 {
   background: linear-gradient(145deg, #2f80ff, #1e63dd);
 }
 
+.action-button[data-tone="warning"] {
+  background: linear-gradient(145deg, #f59e0b, #d97706);
+}
+
 .action-button:disabled {
   opacity: 0.42;
   filter: grayscale(0.25);
@@ -808,8 +812,8 @@ h2 {
 }
 
 .action-icon {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border: 3px solid rgba(255, 255, 255, 0.86);
@@ -817,8 +821,8 @@ h2 {
 }
 
 .action-icon svg {
-  width: 25px;
-  height: 25px;
+  width: 21px;
+  height: 21px;
 }
 
 .action-button strong {
@@ -844,26 +848,6 @@ h2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
-}
-
-.toggle-row {
-  min-height: 68px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0 18px;
-  color: var(--muted);
-  background: var(--surface);
-  font-weight: 900;
-}
-
-.toggle-row input {
-  width: 26px;
-  height: 26px;
-  accent-color: var(--green);
 }
 
 .activity-card {

@@ -40,6 +40,14 @@ const commandDefinitions = [
     label: "Otvori rampu",
     icon: "clock",
     tone: "primary"
+  },
+  {
+    id: "toggleBuzzer",
+    name: "buzzer.enabled",
+    value: "toggle",
+    label: "Buzzer ON",
+    icon: "volume-2",
+    tone: "warning"
   }
 ];
 
@@ -72,8 +80,7 @@ const elements = {
   todayCommandCount: document.querySelector("#todayCommandCount"),
   configForm: document.querySelector("#configForm"),
   detectionDistanceInput: document.querySelector("#detectionDistanceInput"),
-  gateOpenMsInput: document.querySelector("#gateOpenMsInput"),
-  buzzerEnabledInput: document.querySelector("#buzzerEnabledInput")
+  gateOpenMsInput: document.querySelector("#gateOpenMsInput")
 };
 
 let app;
@@ -84,6 +91,7 @@ let recentCommands = [];
 let latestState = null;
 let currentGateOpen = false;
 let currentHasVehicle = false;
+let currentBuzzerEnabled = false;
 
 const ESP_ONLINE_STALE_MS = 8000;
 
@@ -218,6 +226,12 @@ function getCommandPresentation(command) {
     return { title: "Rampa zatvorena", subtitle: "Operator", icon: "arrow-down", tone: "info" };
   }
 
+  if (name === "buzzer.enabled") {
+    return value === true || value === "true"
+      ? { title: "Buzzer ukljucen", subtitle: "Operator", icon: "volume-2", tone: "warning" }
+      : { title: "Buzzer iskljucen", subtitle: "Operator", icon: "volume-x", tone: "warning" };
+  }
+
   if (name === "state.publish") {
     return { title: "Objavljeno stanje", subtitle: "ESP32", icon: "send", tone: "info" };
   }
@@ -232,7 +246,17 @@ function getCommandPresentation(command) {
 
 function resolveCommand(command) {
   if (command.id !== "toggleGate") {
-    return command;
+    if (command.id !== "toggleBuzzer") {
+      return command;
+    }
+
+    const shouldEnable = !currentBuzzerEnabled;
+    return {
+      ...command,
+      value: shouldEnable,
+      label: shouldEnable ? "Buzzer ON" : "Buzzer OFF",
+      icon: shouldEnable ? "volume-2" : "volume-x"
+    };
   }
 
   const shouldClose = currentGateOpen;
@@ -303,6 +327,14 @@ async function sendCommand(command) {
     }
 
     await set(commandRef, payload);
+
+    if (command.name === "buzzer.enabled") {
+      await update(ref(db, devicePath("config")), {
+        buzzerEnabled: Boolean(command.value),
+        updatedAt: serverTimestamp(),
+        updatedBy: "web"
+      });
+    }
   } catch (error) {
     console.error(error);
     setConnectionStatus("Slanje nije uspelo", "error");
@@ -315,6 +347,7 @@ function renderState(state) {
   if (!state) {
     currentGateOpen = false;
     currentHasVehicle = false;
+    currentBuzzerEnabled = false;
     elements.gateState.textContent = "--";
     elements.gateState.classList.remove("is-open");
     elements.gateSubtitle.textContent = "Nema podataka";
@@ -343,6 +376,7 @@ function renderState(state) {
 
   currentGateOpen = isGateOpen;
   currentHasVehicle = hasVehicle;
+  currentBuzzerEnabled = Boolean(state.buzzerEnabled);
   elements.gateState.textContent = isGateOpen ? "Otvorena" : "Zatvorena";
   elements.gateState.classList.toggle("is-open", isGateOpen);
   elements.gateSubtitle.textContent = isGateOpen ? "Rampa je podignuta" : "Rampa je spustena";
@@ -377,9 +411,6 @@ function renderConfig(config) {
     elements.gateOpenMsInput.value = clampNumber(config.gateOpenMs, 4000, 1000, 30000);
   }
 
-  if (typeof config.buzzerEnabled === "boolean") {
-    elements.buzzerEnabledInput.checked = config.buzzerEnabled;
-  }
 }
 
 function renderActivityRows(commands) {
@@ -494,7 +525,6 @@ async function saveConfig(event) {
     await update(ref(db, devicePath("config")), {
       detectionDistanceCm: clampNumber(elements.detectionDistanceInput.value, 25, 5, 200),
       gateOpenMs: getGateOpenMs(),
-      buzzerEnabled: elements.buzzerEnabledInput.checked,
       updatedAt: serverTimestamp(),
       updatedBy: "web"
     });
