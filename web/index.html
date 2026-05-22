@@ -18,7 +18,9 @@
         <div class="connection-controls" aria-label="Povezivanje uredjaja">
           <label class="device-field" for="deviceIdInput">
             <span>Uredjaj</span>
-            <input id="deviceIdInput" type="text" value="esp32_1" autocomplete="off">
+            <select id="deviceIdInput">
+              <option value="esp32_1">esp32_1</option>
+            </select>
           </label>
           <button class="secondary-button" id="connectButton" type="button">Povezi</button>
           <div class="connection-pill" id="connectionStatus">Firebase nije podesen</div>
@@ -26,17 +28,23 @@
       </header>
 
       <main class="dashboard">
-        <section class="left-column" aria-label="Ulaz i senzori">
-          <article class="camera-panel panel" id="cameraPanel">
+        <section class="visuals-grid" aria-label="Kamera ulaza">
+          <article class="visual-panel panel" id="entryPanel">
             <div class="scene-label">
               <strong>Ulaz 01</strong>
               <span id="sceneConnection">Ceka se veza</span>
             </div>
-            <span class="camera-placeholder">Prostor za kameru</span>
-            <div class="parking-scene" aria-hidden="true">
-              <div class="building-wall">
-                <span></span><span></span><span></span><span></span>
-              </div>
+            <p class="scene-subtitle">Rampa 1 - Ulaz</p>
+            <span class="direction-pill entry-pill">
+              <b>ULAZ</b>
+              <i data-lucide="arrow-up"></i>
+            </span>
+            <span class="camera-placeholder">
+              <i data-lucide="camera"></i>
+              Prostor za kameru
+            </span>
+            <div class="parking-scene entry-scene" aria-hidden="true">
+              <div class="building-wall"><span></span></div>
               <div class="road">
                 <span class="lane-mark lane-mark-one"></span>
                 <span class="lane-mark lane-mark-two"></span>
@@ -48,107 +56,130 @@
                 <span></span><span></span><span></span><span></span><span></span>
               </div>
               <div class="parking-sign">P</div>
+              <div class="camera-target"><i data-lucide="camera"></i></div>
               <div class="car-shape" id="carShape"><span></span><span></span></div>
               <div class="sensor-unit"><span></span><span></span><span></span><span></span></div>
             </div>
           </article>
 
-          <div class="bottom-grid">
-            <article class="panel vehicle-card">
-              <h2>Detektovano vozilo</h2>
-              <div class="vehicle-state">
-                <div class="soft-icon vehicle-icon">
-                  <i data-lucide="car"></i>
-                </div>
-                <div>
-                  <strong id="vehicleTitle">Nema vozila</strong>
-                  <span id="vehicleSubtitle">Ceka se senzor udaljenosti</span>
-                </div>
-              </div>
-            </article>
+        </section>
 
-            <article class="panel sensor-card">
-              <h2>Senzori</h2>
-              <div class="sensor-layout">
-                <div>
-                  <span class="muted-label">Udaljenost vozila</span>
-                  <strong class="distance-value"><span id="distanceValue">--</span> cm</strong>
-                  <small id="distanceMeta">Udaljenost: --</small>
-                </div>
-                <div class="sensor-radar" aria-hidden="true">
-                  <span></span><span></span><span></span><span></span>
-                  <b></b>
-                </div>
-              </div>
-              <div class="sensor-row">
-                <span><i data-lucide="volume-2"></i> Buzzer</span>
-                <strong id="buzzerState">--</strong>
-              </div>
-            </article>
+        <section class="panel control-card" aria-label="Upravljanje rampama">
+          <h2>Upravljanje rampama</h2>
+
+          <div class="ramp-control-group">
+            <div class="ramp-control-header">
+              <h3>Rampa 1 (Ulaz 01)</h3>
+              <label class="auto-toggle" for="entryAutoToggle">
+                <input id="entryAutoToggle" type="checkbox">
+                <span>Auto</span>
+              </label>
+            </div>
+            <div class="action-stack" id="commandGrid"></div>
+          </div>
+
+          <div class="ramp-divider"></div>
+
+          <div class="ramp-control-group">
+            <div class="ramp-control-header">
+              <h3>Rampa 2 (Izlaz 01)</h3>
+              <label class="auto-toggle" for="exitAutoToggle">
+                <input id="exitAutoToggle" type="checkbox" checked>
+                <span>Auto</span>
+              </label>
+            </div>
+            <div class="action-stack" id="exitCommandGrid"></div>
           </div>
         </section>
 
-        <section class="middle-column" aria-label="Kontrola rampe">
-          <article class="panel gate-card">
-            <h2>Status rampe</h2>
-            <div class="gate-status">
-              <div class="status-orb" id="gateStatusOrb">
-                <i data-lucide="door-closed"></i>
-              </div>
-              <div>
-                <strong id="gateState">--</strong>
-                <span id="gateSubtitle">Nema podataka</span>
-              </div>
-            </div>
-            <p class="last-change">Poslednja promena: <span id="lastUpdate">--</span></p>
-            <div class="action-stack" id="commandGrid"></div>
-          </article>
-
-          <article class="panel settings-card">
-            <h2>Podesavanja</h2>
-            <form class="config-form" id="configForm">
-              <div class="form-grid">
-                <label class="field" for="detectionDistanceInput">
-                  <span>Detekcija (cm)</span>
-                  <input id="detectionDistanceInput" type="number" min="5" max="200" step="1" value="25">
-                </label>
-                <label class="field" for="gateOpenMsInput">
-                  <span>Otvorena (ms)</span>
-                  <input id="gateOpenMsInput" type="number" min="1000" max="30000" step="500" value="4000">
-                </label>
-              </div>
-              <button class="primary-button full-width" type="submit">Sacuvaj config</button>
-            </form>
-          </article>
-        </section>
-
-        <section class="right-column" aria-label="Aktivnosti i veza">
-          <article class="panel activity-card">
-            <div class="panel-heading">
-              <h2>Nedavne aktivnosti</h2>
+        <section class="panel activity-card" aria-label="Aktivnosti">
+          <div class="panel-heading">
+            <h2>Nedavne aktivnosti</h2>
+            <div class="panel-actions">
+              <button class="report-button" id="exportDailyReportButton" type="button">
+                <i data-lucide="download"></i>
+                Izvestaj
+              </button>
               <button class="link-button" id="toggleActivitiesButton" type="button">Pogledaj sve</button>
             </div>
-            <div class="activity-list" id="commandLog"></div>
-          </article>
+          </div>
+          <div class="activity-list" id="commandLog"></div>
+          <div class="activity-footer">
+            <i data-lucide="clock-3"></i>
+            <span>Poslednje azuriranje: <b id="activityUpdatedAt">--</b></span>
+          </div>
+        </section>
 
-          <div class="stats-grid">
-            <article class="panel stat-card">
-              <div class="soft-icon blue-icon">
+        <section class="bottom-left-grid" aria-label="Senzori i vozilo">
+          <article class="panel vehicle-card">
+            <h2>Detektovano vozilo</h2>
+            <div class="vehicle-state">
+              <div class="soft-icon vehicle-icon">
                 <i data-lucide="car-front"></i>
               </div>
-              <strong id="todayCommandCount">0</strong>
-              <span>Komandi danas</span>
-              <small id="lastCommandValue">--</small>
-            </article>
-            <article class="panel stat-card">
-              <div class="soft-icon green-icon">
-                <i data-lucide="wifi"></i>
+              <div>
+                <strong id="vehicleTitle">Nema vozila</strong>
+                <span id="vehicleSubtitle">Ceka se senzor udaljenosti</span>
               </div>
-              <strong id="connectionMetric">Offline</strong>
-              <span>Konekcija</span>
-              <small id="connectionDetail">Ceka se Firebase</small>
-            </article>
-          </div>
+            </div>
+            <div class="info-strip">
+              <i data-lucide="info"></i>
+              Senzori se automatski osvezavaju na svakih 1s.
+            </div>
+          </article>
+
+          <article class="panel sensor-card">
+            <h2>Senzori udaljenosti</h2>
+            <div class="dual-sensors">
+              <div class="sensor-reading">
+                <span class="muted-label">Ulaz 01</span>
+                <strong class="distance-value"><span id="distanceValue">--</span> cm</strong>
+                <small id="distanceMeta">Udaljenost: --</small>
+                <div class="sensor-radar" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><b></b>
+                </div>
+              </div>
+
+              <div class="sensor-reading">
+                <span class="muted-label">Izlaz 01</span>
+                <strong class="distance-value"><span id="exitDistanceValue">--</span> cm</strong>
+                <small id="exitDistanceMeta">Udaljenost: --</small>
+                <div class="sensor-radar" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><b></b>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel settings-card" aria-label="Podesavanja">
+          <h2>Podesavanja</h2>
+          <button class="settings-open-button" id="openSettingsModal" type="button">
+            <span class="soft-icon blue-icon">
+              <i data-lucide="sliders-horizontal"></i>
+            </span>
+            <strong>Otvori podesavanja</strong>
+          </button>
+        </section>
+
+        <section class="stats-grid" aria-label="Statistika">
+          <article class="panel stat-card">
+            <div class="soft-icon blue-icon">
+              <i data-lucide="send"></i>
+            </div>
+            <span>Komande danas</span>
+            <strong id="todayCommandCount">0</strong>
+            <small id="lastCommandValue">--</small>
+          </article>
+
+          <article class="panel stat-card">
+            <div class="soft-icon green-icon">
+              <i data-lucide="wifi"></i>
+            </div>
+            <span>Konekcija</span>
+            <strong id="connectionMetric">Offline</strong>
+            <small id="connectionDetail">Ceka se ESP32</small>
+          </article>
         </section>
       </main>
     </div>
@@ -162,6 +193,103 @@
           </button>
         </div>
         <div class="modal-activity-list" id="allCommandLog"></div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="settingsModal" hidden>
+      <section class="modal-panel settings-modal-panel" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+        <div class="modal-heading">
+          <h2 id="settingsModalTitle">Podesavanja sistema</h2>
+          <button class="icon-button" id="closeSettingsModal" type="button" aria-label="Zatvori">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+
+        <form class="config-form settings-modal-form" id="configForm">
+          <div class="settings-section">
+            <h3>Rampa 1 (Ulaz 01)</h3>
+            <div class="form-grid">
+              <label class="field" for="entryDetectionDistanceInput">
+                <span>Detekcija (cm)</span>
+                <input id="entryDetectionDistanceInput" type="number" min="5" max="200" step="1" value="25">
+              </label>
+              <label class="field" for="entryGateOpenMsInput">
+                <span>Otvorena (ms)</span>
+                <input id="entryGateOpenMsInput" type="number" min="1000" max="30000" step="500" value="4000">
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Rampa 2 (Izlaz 01)</h3>
+            <div class="form-grid three-fields">
+              <label class="field" for="exitDetectDistanceInput">
+                <span>Detekcija (cm)</span>
+                <input id="exitDetectDistanceInput" type="number" min="5" max="150" step="1" value="30">
+              </label>
+              <label class="field" for="exitOpenDistanceInput">
+                <span>Otvara na (cm)</span>
+                <input id="exitOpenDistanceInput" type="number" min="5" max="150" step="1" value="20">
+              </label>
+              <label class="field" for="exitGateOpenMsInput">
+                <span>Otvorena (ms)</span>
+                <input id="exitGateOpenMsInput" type="number" min="1000" max="30000" step="500" value="4000">
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>RGB LED - ulaz</h3>
+            <div class="form-grid rgb-grid">
+              <label class="field color-field" for="rgbIdleColorInput">
+                <span>Nema vozila</span>
+                <select id="rgbIdleColorInput">
+                  <option value="blue">Plava</option>
+                  <option value="green">Zelena</option>
+                  <option value="red">Crvena</option>
+                  <option value="yellow">Zuta</option>
+                  <option value="white">Bela</option>
+                  <option value="off">Ugasena</option>
+                </select>
+              </label>
+              <label class="field color-field" for="rgbWaitingColorInput">
+                <span>Ceka odluku</span>
+                <select id="rgbWaitingColorInput">
+                  <option value="yellow">Zuta</option>
+                  <option value="blue">Plava</option>
+                  <option value="green">Zelena</option>
+                  <option value="red">Crvena</option>
+                  <option value="white">Bela</option>
+                  <option value="off">Ugasena</option>
+                </select>
+              </label>
+              <label class="field color-field" for="rgbOpenColorInput">
+                <span>Rampa otvorena</span>
+                <select id="rgbOpenColorInput">
+                  <option value="green">Zelena</option>
+                  <option value="blue">Plava</option>
+                  <option value="yellow">Zuta</option>
+                  <option value="red">Crvena</option>
+                  <option value="white">Bela</option>
+                  <option value="off">Ugasena</option>
+                </select>
+              </label>
+              <label class="field color-field" for="rgbDeniedColorInput">
+                <span>Zabranjen prolaz</span>
+                <select id="rgbDeniedColorInput">
+                  <option value="red">Crvena</option>
+                  <option value="yellow">Zuta</option>
+                  <option value="blue">Plava</option>
+                  <option value="green">Zelena</option>
+                  <option value="white">Bela</option>
+                  <option value="off">Ugasena</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <button class="primary-button full-width" type="submit">Sacuvaj config</button>
+        </form>
       </section>
     </div>
 

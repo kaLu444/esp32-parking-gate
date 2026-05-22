@@ -1,246 +1,169 @@
-# ESP32 Parking Gate Remote Control
+# Udaljena kontrola parking rampe
 
-Osnova projekta za udaljenu kontrolu ESP32 parking rampe preko staticke web aplikacije, Firebase Realtime Database-a i Arduino/C++ koda za ESP32.
+Ovaj projekat predstavlja sistem za udaljeno upravljanje parking rampama preko web aplikacije i ESP32 uredjaja. Sistem je zamisljen kao prototip pametnog parking ulaza i izlaza, sa komunikacijom preko Firebase Realtime Database-a.
 
-## Struktura projekta
+Web aplikacija sluzi kao kontrolna tabla za operatora, dok ESP32 upravlja senzorima, servo motorima, buzzerima, LED signalizacijom i fizickim dugmadima. Projekat je napravljen tako da moze kasnije da se prosiri novim senzorima, komandama, izlazima i rezimima rada.
 
-```text
-.
-├── .github/workflows/pages.yml     # GitHub Pages deploy iz web/ direktorijuma
-├── database.rules.json             # Firebase Realtime Database pravila za prototip
-├── esp32_control/
-│   └── esp32_control.ino           # ESP32 Arduino kod
-└── web/
-    ├── app.js                      # Firebase komunikacija i UI logika
-    ├── firebase-config.js          # Firebase config koji treba popuniti
-    ├── index.html                  # Web aplikacija
-    └── styles.css                  # Moderan responsive UI
-```
+## Glavna ideja
 
-## Firebase model podataka
+Sistem ima dve rampe:
+
+- Rampa 1 predstavlja ulaz.
+- Rampa 2 predstavlja izlaz.
+
+Ulazna rampa koristi ultrazvucni senzor za detekciju vozila, servo motor za podizanje rampe, pasivni buzzer kao parking senzor, RGB diodu za signalizaciju i fizicka dugmad za dozvolu ili zabranu prolaza.
+
+Izlazna rampa koristi Sharp analogni senzor za detekciju vozila, drugi servo motor, aktivni buzzer i dve LED diode za prikaz da li je rampa spustena ili podignuta.
+
+## Sta web aplikacija radi
+
+Web aplikacija prikazuje stanje sistema u realnom vremenu:
+
+- da li je ESP32 online ili offline
+- da li je vozilo detektovano
+- trenutnu udaljenost na ulazu i izlazu
+- stanje ulazne i izlazne rampe
+- broj komandi poslatih tokom dana
+- poslednje aktivnosti sistema
+
+Operator kroz aplikaciju moze da:
+
+- dozvoli pristup na ulazu
+- zabrani pristup na ulazu
+- otvori ili zatvori ulaznu rampu
+- ukljuci ili iskljuci buzzer ulaza
+- dozvoli izlaz
+- zabrani izlaz
+- otvori ili zatvori izlaznu rampu
+- ukljuci ili iskljuci buzzer izlaza
+- ukljuci automatski rezim za svaku rampu posebno
+- pregleda sve aktivnosti u popup prozoru
+- eksportuje dnevni izvestaj u CSV formatu
+
+U aplikaciji postoji i prostor za jednu kameru. Kamera trenutno nije povezana, ali je UI pripremljen da se kasnije doda video prikaz ulaza.
+
+## Podesavanja sistema
+
+Podesavanja nisu prikazana stalno na glavnoj tabli, vec se otvaraju kroz poseban popup. Time glavna kontrolna tabla ostaje pregledna, a detaljna konfiguracija je dostupna samo kada je potrebna.
+
+U podesavanjima se trenutno mogu menjati:
+
+- udaljenost detekcije za ulaznu rampu
+- vreme koliko ulazna rampa ostaje otvorena
+- udaljenost detekcije za izlaznu rampu
+- udaljenost na kojoj se izlazna rampa automatski otvara
+- vreme koliko izlazna rampa ostaje otvorena
+- boja RGB diode kada nema vozila
+- boja RGB diode dok se ceka odluka
+- boja RGB diode kada je rampa otvorena
+- boja RGB diode kada je prolaz zabranjen
+
+Podesavanja se cuvaju u Firebase Realtime Database-u i ESP32 ih periodicki cita.
+
+## Automatski i rucni rad
+
+Svaka rampa ima svoj `Auto` checkbox.
+
+Kada je automatski rezim ukljucen za ulaznu rampu, rampa se automatski otvara kada senzor detektuje vozilo. Kada je automatski rezim iskljucen, operator mora rucno da dozvoli ili zabrani prolaz.
+
+Izlazna rampa je po defaultu zamisljena da radi automatski. Sharp senzor konstatuje vozilo samo u zadatom opsegu, a rampa se otvara tek kada je vozilo dovoljno blizu.
+
+Rucno otvaranje rampe preko web aplikacije drzi rampu otvorenom dok operator ponovo ne klikne zatvaranje.
+
+## Signalizacija
+
+Ulazna rampa koristi RGB diodu:
+
+- plava boja oznacava da nema vozila
+- zuta boja oznacava da vozilo ceka odluku
+- zelena boja oznacava dozvoljen prolaz
+- crvena boja oznacava zabranjen prolaz
+
+Ove boje mogu da se promene iz web aplikacije.
+
+Izlazna rampa koristi dve posebne LED diode:
+
+- crvena LED oznacava da je rampa spustena
+- zelena LED oznacava da je rampa podignuta
+
+## Buzzer logika
+
+Ulazni buzzer radi kao parking senzor u automobilu. Kada je vozilo dalje od kriticne zone, buzzer ne pisti. Kada vozilo udje ispod 10 cm, buzzer pocinje da pisti u kratkim intervalima.
+
+Sto je vozilo blize rampi, interval izmedju bipova je kraci:
+
+- na vecoj udaljenosti cuje se spor ritam
+- na srednjoj udaljenosti ritam postaje brzi
+- kada je vozilo veoma blizu, bipovi su skoro spojeni
+
+Izlazni buzzer je aktivni buzzer i koristi se kao kratak zvucni signal kada se druga rampa otvori ili zatvori.
+
+## Firebase struktura
 
 Komunikacija je organizovana po uredjaju:
 
-```json
-{
-  "devices": {
-    "esp32_1": {
-      "commands": {
-        "-pushId": {
-          "name": "gate.access",
-          "value": "allow",
-          "timestamp": 1710000000000,
-          "source": "web"
-        }
-      },
-      "state": {
-        "online": true,
-        "gate": "closed",
-        "carPresent": false,
-        "distanceCm": 32.4,
-        "lastProcessedCommand": {
-          "name": "gate.access",
-          "value": "allow",
-          "source": "web",
-          "result": "ok"
-        }
-      },
-      "config": {
-        "displayName": "Parking kapija",
-        "detectionDistanceCm": 20,
-        "gateOpenMs": 4000,
-        "buzzerEnabled": true,
-        "mode": "auto"
-      }
-    }
-  }
-}
-```
-
-Svaka komanda ima `name`, `value` i `timestamp`. Web aplikacija dodaje komande kroz `push()`, a ESP32 cita najnoviju komandu sortiranu po `timestamp`. Poslednja obradjena remote komanda se pamti u ESP32 NVS memoriji (`Preferences`), pa se ista komanda ne izvrsava vise puta ni posle restartovanja uredjaja.
-
-## Kako napraviti Firebase projekat
-
-1. Otvori [Firebase Console](https://console.firebase.google.com/) i izaberi `Add project`.
-2. Unesi naziv projekta.
-3. Google Analytics mozes da iskljucis za ovaj prototip.
-4. Ostani na besplatnom Spark planu. Za ovaj projekat nisu potrebni placeni servisi.
-
-## Kako podesiti Realtime Database
-
-1. U Firebase projektu otvori `Build > Realtime Database`.
-2. Izaberi `Create database`.
-3. Izaberi lokaciju baze. URL ce liciti na:
-
 ```text
-https://PROJECT_ID-default-rtdb.europe-west1.firebasedatabase.app
+devices/esp32_1/commands
+devices/esp32_1/state
+devices/esp32_1/config
 ```
 
-4. Za skolski prototip mozes da izaberes test mode.
-5. U tabu `Rules` nalepi sadrzaj fajla `database.rules.json`:
+`commands` cuva komande koje web aplikacija salje ESP32 uredjaju.
 
-```json
-{
-  "rules": {
-    "devices": {
-      "$deviceId": {
-        ".read": true,
-        ".write": true,
-        "commands": {
-          ".indexOn": ["timestamp"]
-        }
-      }
-    }
-  }
-}
-```
+`state` cuva trenutno stanje koje ESP32 salje nazad aplikaciji.
 
-Ova pravila su namerno otvorena da bi web aplikacija sa GitHub Pages-a i ESP32 mogli da komuniciraju bez dodatnog servera. To je prihvatljivo za demo/prototip, ali nije za javnu produkciju. Za ozbiljniji sistem dodaj Firebase Authentication i stroza pravila.
+`config` cuva podesavanja sistema koja se menjaju iz web aplikacije.
 
-## Kako ubaciti Firebase config u web aplikaciju
+Svaka komanda ima:
 
-1. U Firebase Console otvori `Project settings`.
-2. U sekciji `Your apps` dodaj Web app ako vec ne postoji.
-3. Kopiraj `firebaseConfig`.
-4. Zameni placeholder vrednosti u `web/firebase-config.js`.
-5. Obavezno proveri da `databaseURL` odgovara Realtime Database URL-u.
+- naziv komande
+- vrednost komande
+- timestamp
+- izvor komande
+- identifikator zahteva
 
-Primer:
+ESP32 pamti poslednju obradjenu komandu, tako da se ista komanda ne izvrsi vise puta.
 
-```js
-export const firebaseConfig = {
-  apiKey: "AIza...",
-  authDomain: "tvoj-projekat.firebaseapp.com",
-  databaseURL: "https://tvoj-projekat-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "tvoj-projekat",
-  storageBucket: "tvoj-projekat.firebasestorage.app",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
-};
-```
+## Podrzane komande
 
-## Kako podesiti ESP32 kod
-
-U Arduino IDE instaliraj:
-
-- ESP32 board paket od Espressif-a
-- `ESP32Servo`
-- `ArduinoJson`
-
-Za lokalne WiFi/Firebase podatke koristi `secrets.h`, da sifra ne ode na GitHub.
-
-1. Kopiraj primer:
-
-```powershell
-Copy-Item esp32_control/secrets.example.h esp32_control/secrets.h
-```
-
-2. U `esp32_control/secrets.h` popuni:
-
-```cpp
-const char* WIFI_SSID = "IME_WIFI_MREZE";
-const char* WIFI_PASSWORD = "WIFI_LOZINKA";
-const char* DATABASE_URL = "https://PROJECT_ID-default-rtdb.europe-west1.firebasedatabase.app";
-```
-
-3. Device ID ostaje u `esp32_control/esp32_control.ino`:
-
-```cpp
-const char* DEVICE_ID = "esp32_1";
-```
-
-Fajl `esp32_control/secrets.h` je dodat u `.gitignore`, pa ostaje samo na tvom racunaru.
-
-ESP32 koristi ove glavne putanje:
-
-- `devices/esp32_1/commands` za citanje remote komandi
-- `devices/esp32_1/state` za slanje stanja
-- `devices/esp32_1/config` za citanje podesavanja
-
-Kod koristi `WiFiClientSecure.setInsecure()` da pojednostavi HTTPS za prototip. Za produkciju treba koristiti validan CA sertifikat umesto toga.
-
-## Kako pokrenuti web aplikaciju lokalno
-
-Web aplikaciju pokreci preko lokalnog servera, jer ES module importi i Firebase SDK rade pouzdanije preko HTTP/HTTPS nego direktnim otvaranjem fajla.
-
-```powershell
-node tools/dev-server.mjs
-```
-
-Zatim otvori:
-
-```text
-http://localhost:5173
-```
-
-## Kako pokrenuti web aplikaciju preko GitHub Pages
-
-U projektu vec postoji workflow `.github/workflows/pages.yml`, koji deploy-uje sadrzaj `web/` direktorijuma.
-
-1. Push-uj projekat na GitHub u `main` branch.
-2. Otvori `Settings > Pages`.
-3. U `Build and deployment > Source` izaberi `GitHub Actions`.
-4. Pokreni workflow ili push-uj novu izmenu na `main`.
-5. Kada deploy prodje, stranica ce biti dostupna preko GitHub Pages URL-a.
-
-Ako ne zelis GitHub Actions, alternativa je da prebacis sadrzaj `web/` direktorijuma u root ili `docs/` folder i u Pages podesavanjima izaberes `Deploy from a branch`.
-
-## Kako dodati novu komandu
-
-Primer: dodavanje komande `light.enabled`.
-
-1. U `web/app.js` dodaj novi objekat u `commandDefinitions`:
-
-```js
-{
-  name: "light.enabled",
-  value: true,
-  label: "Svetlo ON",
-  description: "Ukljuci dodatno svetlo.",
-  icon: "lightbulb",
-  tone: "info"
-}
-```
-
-2. U `esp32_control/esp32_control.ino` dodaj novi pin u `namespace Pins`.
-
-```cpp
-const uint8_t LIGHT = 26;
-```
-
-3. U `setupPins()` postavi pin mode.
-
-```cpp
-pinMode(Pins::LIGHT, OUTPUT);
-```
-
-4. U centralni handler dodaj novu granu:
-
-```cpp
-if (normalizedName == "light.enabled") {
-  digitalWrite(Pins::LIGHT, normalizedValue == "true" ? HIGH : LOW);
-  return true;
-}
-```
-
-5. Ako treba i fizicko dugme, dodaj novi `ButtonMapping` koji poziva isto ime komande i vrednost. Tako lokalno dugme i web aplikacija ostaju na istoj logici.
-
-## Glavne komande koje su vec podrzane
-
-| Komanda | Vrednost | Efekat |
+| Komanda | Vrednost | Opis |
 | --- | --- | --- |
-| `gate.access` | `allow` | Otvara rampu na podeseno vreme |
-| `gate.access` | `deny` | Zatvara rampu i odbija prolaz |
-| `gate.position` | `open` | Otvara rampu |
-| `gate.position` | `close` | Zatvara rampu |
-| `buzzer.enabled` | `true` / `false` | Ukljucuje ili iskljucuje buzzer |
-| `mode` | `auto` / `manual` | Menja rezim rada |
-| `state.publish` | `now` | Trazi trenutno stanje uredjaja |
+| `gate.access` | `allow` | Dozvoljava prolaz na ulazu |
+| `gate.access` | `deny` | Zabranjuje prolaz na ulazu |
+| `gate.position` | `open` | Otvara ulaznu rampu |
+| `gate.position` | `close` | Zatvara ulaznu rampu |
+| `buzzer.enabled` | `true` / `false` | Ukljucuje ili iskljucuje buzzer ulaza |
+| `gate2.access` | `allow` | Dozvoljava izlaz |
+| `gate2.access` | `deny` | Zabranjuje izlaz |
+| `gate2.position` | `open` | Otvara izlaznu rampu |
+| `gate2.position` | `close` | Zatvara izlaznu rampu |
+| `gate2.buzzer.enabled` | `true` / `false` | Ukljucuje ili iskljucuje buzzer izlaza |
 
-## Korisni zvanicni linkovi
+## ESP32 deo sistema
 
-- [Firebase Realtime Database web setup](https://firebase.google.com/docs/database/web/start)
-- [Firebase Realtime Database REST API](https://firebase.google.com/docs/reference/rest/database)
-- [Firebase Realtime Database security rules](https://firebase.google.com/docs/database/security)
-- [Firebase indexing data](https://firebase.google.com/docs/database/security/indexing-data)
-- [GitHub Pages publishing source](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+ESP32 je centralni uredjaj koji povezuje fizicki sistem sa cloud bazom. On cita komande iz Firebase-a, obradjuje ih kroz centralni command handler i izvrsava odgovarajuce funkcije.
+
+Fizicka dugmad na ESP32 uredjaju pozivaju iste funkcije kao i komande iz web aplikacije. Zbog toga sistem ima jednu zajednicku logiku za lokalno i udaljeno upravljanje.
+
+Kod je organizovan tako da se nove komande, novi senzori i novi GPIO pinovi mogu dodavati bez menjanja cele strukture programa.
+
+## Tehnologije
+
+Projekat koristi:
+
+- HTML, CSS i JavaScript bez frameworka
+- Firebase Realtime Database za komunikaciju
+- GitHub Pages za hosting web aplikacije
+- Arduino IDE i C++ za ESP32 kod
+- ESP32Servo biblioteku za upravljanje servo motorima
+- ArduinoJson za obradu JSON podataka
+
+Sistem ne koristi placene servise.
+
+## Trenutno stanje projekta
+
+Trenutno je napravljena osnova funkcionalnog sistema za dve parking rampe. Web aplikacija ima moderan dashboard, komande za obe rampe, aktivnosti, izvestaj, podesavanja i prikaz stanja uredjaja.
+
+ESP32 kod podrzava dve rampe, dva senzora, dva buzzera, RGB diodu, dve LED diode, fizicka dugmad, Firebase komande, slanje stanja i citanje konfiguracije.
+
+Projekat je spreman za testiranje na pravom hardveru i dalje prosirenje, na primer dodavanje kamere, evidencije korisnika, dodatnih senzora ili naprednijih pravila za automatski rad.

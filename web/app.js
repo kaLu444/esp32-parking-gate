@@ -14,9 +14,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
 
-const commandDefinitions = [
+const entryCommands = [
   {
-    id: "allowAccess",
+    id: "entryAllow",
+    ramp: "entry",
     name: "gate.access",
     value: "allow",
     label: "Dozvoli pristup",
@@ -25,7 +26,8 @@ const commandDefinitions = [
     requiresVehicle: true
   },
   {
-    id: "denyAccess",
+    id: "entryDeny",
+    ramp: "entry",
     name: "gate.access",
     value: "deny",
     label: "Zabrani pristup",
@@ -34,16 +36,59 @@ const commandDefinitions = [
     requiresVehicle: true
   },
   {
-    id: "toggleGate",
+    id: "entryGate",
+    ramp: "entry",
     name: "gate.position",
     value: "toggle",
     label: "Otvori rampu",
-    icon: "clock",
+    icon: "arrow-up",
     tone: "primary"
   },
   {
-    id: "toggleBuzzer",
+    id: "entryBuzzer",
+    ramp: "entry",
     name: "buzzer.enabled",
+    value: "toggle",
+    label: "Buzzer ON",
+    icon: "volume-2",
+    tone: "warning"
+  }
+];
+
+const exitCommands = [
+  {
+    id: "exitAllow",
+    ramp: "exit",
+    name: "gate2.access",
+    value: "allow",
+    label: "Dozvoli izlaz",
+    icon: "arrow-up",
+    tone: "success",
+    requiresVehicle: true
+  },
+  {
+    id: "exitDeny",
+    ramp: "exit",
+    name: "gate2.access",
+    value: "deny",
+    label: "Zabrani izlaz",
+    icon: "hand",
+    tone: "danger",
+    requiresVehicle: true
+  },
+  {
+    id: "exitGate",
+    ramp: "exit",
+    name: "gate2.position",
+    value: "toggle",
+    label: "Otvori rampu",
+    icon: "arrow-up",
+    tone: "primary"
+  },
+  {
+    id: "exitBuzzer",
+    ramp: "exit",
+    name: "gate2.buzzer.enabled",
     value: "toggle",
     label: "Buzzer ON",
     icon: "volume-2",
@@ -59,28 +104,39 @@ const elements = {
   deviceIdInput: document.querySelector("#deviceIdInput"),
   connectButton: document.querySelector("#connectButton"),
   commandGrid: document.querySelector("#commandGrid"),
+  exitCommandGrid: document.querySelector("#exitCommandGrid"),
+  entryAutoToggle: document.querySelector("#entryAutoToggle"),
+  exitAutoToggle: document.querySelector("#exitAutoToggle"),
   commandLog: document.querySelector("#commandLog"),
   allCommandLog: document.querySelector("#allCommandLog"),
+  exportDailyReportButton: document.querySelector("#exportDailyReportButton"),
   toggleActivitiesButton: document.querySelector("#toggleActivitiesButton"),
   activitiesModal: document.querySelector("#activitiesModal"),
   closeActivitiesModal: document.querySelector("#closeActivitiesModal"),
-  activityCard: document.querySelector(".activity-card"),
-  gateState: document.querySelector("#gateState"),
-  gateSubtitle: document.querySelector("#gateSubtitle"),
-  gateStatusOrb: document.querySelector("#gateStatusOrb"),
+  openSettingsModal: document.querySelector("#openSettingsModal"),
+  settingsModal: document.querySelector("#settingsModal"),
+  closeSettingsModal: document.querySelector("#closeSettingsModal"),
   gateArm: document.querySelector("#gateArm"),
   carShape: document.querySelector("#carShape"),
   vehicleTitle: document.querySelector("#vehicleTitle"),
   vehicleSubtitle: document.querySelector("#vehicleSubtitle"),
   distanceValue: document.querySelector("#distanceValue"),
   distanceMeta: document.querySelector("#distanceMeta"),
-  buzzerState: document.querySelector("#buzzerState"),
-  lastUpdate: document.querySelector("#lastUpdate"),
+  exitDistanceValue: document.querySelector("#exitDistanceValue"),
+  exitDistanceMeta: document.querySelector("#exitDistanceMeta"),
   lastCommandValue: document.querySelector("#lastCommandValue"),
   todayCommandCount: document.querySelector("#todayCommandCount"),
+  activityUpdatedAt: document.querySelector("#activityUpdatedAt"),
   configForm: document.querySelector("#configForm"),
-  detectionDistanceInput: document.querySelector("#detectionDistanceInput"),
-  gateOpenMsInput: document.querySelector("#gateOpenMsInput")
+  entryDetectionDistanceInput: document.querySelector("#entryDetectionDistanceInput"),
+  entryGateOpenMsInput: document.querySelector("#entryGateOpenMsInput"),
+  exitDetectDistanceInput: document.querySelector("#exitDetectDistanceInput"),
+  exitOpenDistanceInput: document.querySelector("#exitOpenDistanceInput"),
+  exitGateOpenMsInput: document.querySelector("#exitGateOpenMsInput"),
+  rgbIdleColorInput: document.querySelector("#rgbIdleColorInput"),
+  rgbWaitingColorInput: document.querySelector("#rgbWaitingColorInput"),
+  rgbOpenColorInput: document.querySelector("#rgbOpenColorInput"),
+  rgbDeniedColorInput: document.querySelector("#rgbDeniedColorInput")
 };
 
 let app;
@@ -88,12 +144,18 @@ let db;
 let activeDeviceId = elements.deviceIdInput.value.trim();
 let activeUnsubscribers = [];
 let recentCommands = [];
+let todayCommands = [];
 let latestState = null;
-let currentGateOpen = false;
-let currentHasVehicle = false;
-let currentBuzzerEnabled = false;
+let currentEntryGateOpen = false;
+let currentExitGateOpen = false;
+let currentEntryHasVehicle = false;
+let currentExitHasVehicle = false;
+let currentEntryBuzzerEnabled = false;
+let currentExitBuzzerEnabled = false;
+let latestConfig = null;
 
 const ESP_ONLINE_STALE_MS = 8000;
+const RGB_COLOR_VALUES = ["blue", "green", "red", "yellow", "white", "off"];
 
 function hasFirebaseConfig() {
   const requiredKeys = ["apiKey", "authDomain", "databaseURL", "projectId", "appId"];
@@ -115,32 +177,13 @@ function setConnectionStatus(message, state = "warning") {
   elements.connectionStatus.classList.add(`is-${state}`);
 }
 
-function isEspStateFresh(state) {
-  return typeof state?.updatedAt === "number" && Date.now() - state.updatedAt <= ESP_ONLINE_STALE_MS;
-}
-
-function isEspOnline(state) {
-  return Boolean(state?.online) && isEspStateFresh(state);
-}
-
-function renderEspConnection(state) {
-  const online = isEspOnline(state);
-  const hasState = Boolean(state);
-
-  setConnectionStatus(online ? "ESP32 online" : "ESP32 offline", online ? "online" : "warning");
-  elements.sceneConnection.textContent = online ? "Online veza" : "Offline";
-  elements.sceneConnection.classList.toggle("is-online", online);
-  elements.connectionMetric.textContent = online ? "Online" : "Offline";
-  elements.connectionDetail.textContent = online
-    ? "ESP32 salje stanje"
-    : hasState
-      ? `Zadnje stanje: ${formatClock(state.updatedAt)}`
-      : "Ceka se ESP32";
-}
-
 function devicePath(childPath = "") {
   const basePath = `devices/${activeDeviceId}`;
   return childPath ? `${basePath}/${childPath}` : basePath;
+}
+
+function firstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null);
 }
 
 function formatValue(value) {
@@ -167,6 +210,24 @@ function formatClock(timestamp) {
   }).format(new Date(timestamp));
 }
 
+function formatShortDate(timestamp) {
+  if (typeof timestamp !== "number") {
+    return "--";
+  }
+
+  return new Intl.DateTimeFormat("sr-RS", {
+    day: "numeric",
+    month: "short"
+  }).format(new Date(timestamp)).replace(".", "");
+}
+
+function formatFileDate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function isToday(timestamp) {
   if (typeof timestamp !== "number") {
     return false;
@@ -185,7 +246,7 @@ function getDayStartTimestamp() {
 }
 
 function getDistanceText(distanceCm) {
-  if (typeof distanceCm !== "number" || distanceCm < 0) {
+  if (typeof distanceCm !== "number" || distanceCm < 0 || !Number.isFinite(distanceCm)) {
     return "--";
   }
 
@@ -202,34 +263,294 @@ function clampNumber(value, fallback, min, max) {
   return numberValue;
 }
 
-function getGateOpenMs() {
-  return clampNumber(elements.gateOpenMsInput.value, 4000, 1000, 30000);
+function getEntryDetectionDistanceCm() {
+  return clampNumber(
+    firstDefined(elements.entryDetectionDistanceInput.value, latestConfig?.entryDetectionDistanceCm, latestConfig?.detectionDistanceCm),
+    25,
+    5,
+    200
+  );
+}
+
+function getExitDetectDistanceCm() {
+  return clampNumber(
+    firstDefined(elements.exitDetectDistanceInput.value, latestConfig?.exitDetectDistanceCm),
+    30,
+    5,
+    150
+  );
+}
+
+function getExitOpenDistanceCm() {
+  const detectDistance = getExitDetectDistanceCm();
+  const fallback = Math.min(20, detectDistance);
+  return clampNumber(elements.exitOpenDistanceInput.value, fallback, 5, detectDistance);
+}
+
+function getGateOpenMs(ramp = "entry") {
+  const input = ramp === "exit" ? elements.exitGateOpenMsInput : elements.entryGateOpenMsInput;
+  return clampNumber(input.value, 4000, 1000, 30000);
+}
+
+function getRgbValue(input, fallback) {
+  return input.value || fallback;
+}
+
+function getConfigColor(value, fallback) {
+  return RGB_COLOR_VALUES.includes(value) ? value : fallback;
+}
+
+function updateColorField(input) {
+  input.closest(".color-field")?.setAttribute("data-color", input.value);
+}
+
+function updateColorFields() {
+  [
+    elements.rgbIdleColorInput,
+    elements.rgbWaitingColorInput,
+    elements.rgbOpenColorInput,
+    elements.rgbDeniedColorInput
+  ].forEach(updateColorField);
+}
+
+function isEspStateFresh(state) {
+  return typeof state?.updatedAt === "number" && Date.now() - state.updatedAt <= ESP_ONLINE_STALE_MS;
+}
+
+function isEspOnline(state) {
+  return Boolean(state?.online) && isEspStateFresh(state);
+}
+
+function setSceneConnection(element, online) {
+  element.textContent = online ? "Online" : "Offline";
+  element.classList.toggle("is-offline", !online);
+}
+
+function renderEspConnection(state) {
+  const online = isEspOnline(state);
+  const hasState = Boolean(state);
+
+  setConnectionStatus(online ? "ESP32 online" : "ESP32 offline", online ? "online" : "warning");
+  setSceneConnection(elements.sceneConnection, online);
+  elements.connectionMetric.textContent = online ? "Online" : "Offline";
+  elements.connectionDetail.textContent = online
+    ? "ESP32 salje stanje"
+    : hasState
+      ? `Zadnje stanje: ${formatClock(state.updatedAt)}`
+      : "Ceka se ESP32";
+}
+
+function isGateOpen(value) {
+  return value === "open" || value === "opened" || value === true;
+}
+
+function inferVehicle(carPresent, distanceCm, detectionDistance) {
+  if (typeof carPresent === "boolean") {
+    return carPresent;
+  }
+
+  return typeof distanceCm === "number" && distanceCm > 0 && distanceCm <= detectionDistance;
+}
+
+function extractEntryState(state) {
+  const entry = firstDefined(state?.gates?.entry, state?.entry, state?.rampa1, state?.ramp1, {});
+  const distanceCm = firstDefined(
+    entry.distanceCm,
+    entry.distance,
+    state?.distanceCm,
+    state?.ultrasonicDistanceCm,
+    state?.entryDistanceCm,
+    state?.distance1Cm
+  );
+  const carPresent = firstDefined(entry.carPresent, state?.carPresent, state?.entryCarPresent, state?.car1Present);
+
+  return {
+    gateOpen: isGateOpen(firstDefined(entry.gate, entry.gatePosition, entry.position, state?.gate, state?.gatePosition, state?.position, state?.gate1)),
+    distanceCm,
+    carPresent: inferVehicle(carPresent, distanceCm, getEntryDetectionDistanceCm()),
+    buzzerEnabled: Boolean(firstDefined(entry.buzzerEnabled, state?.buzzerEnabled, state?.entryBuzzerEnabled))
+  };
+}
+
+function extractExitState(state) {
+  const exit = firstDefined(state?.gates?.exit, state?.exit, state?.rampa2, state?.ramp2, {});
+  const distanceCm = firstDefined(
+    exit.distanceCm,
+    exit.distance,
+    state?.exitDistanceCm,
+    state?.sharpDistanceCm,
+    state?.distance2Cm
+  );
+  const carPresent = firstDefined(exit.carPresent, state?.exitCarPresent, state?.car2Present);
+
+  return {
+    gateOpen: isGateOpen(firstDefined(exit.gate, exit.gatePosition, exit.position, state?.exitGate, state?.gate2)),
+    distanceCm,
+    carPresent: inferVehicle(carPresent, distanceCm, getExitDetectDistanceCm()),
+    buzzerEnabled: Boolean(firstDefined(exit.buzzerEnabled, state?.exitBuzzerEnabled, state?.gate2BuzzerEnabled))
+  };
+}
+
+function getCommandGateState(command) {
+  return command.ramp === "exit" ? currentExitGateOpen : currentEntryGateOpen;
+}
+
+function getCommandVehicleState(command) {
+  return command.ramp === "exit" ? currentExitHasVehicle : currentEntryHasVehicle;
+}
+
+function getCommandBuzzerState(command) {
+  return command.ramp === "exit" ? currentExitBuzzerEnabled : currentEntryBuzzerEnabled;
+}
+
+function resolveCommand(command) {
+  if (command.name.endsWith(".position")) {
+    const shouldClose = getCommandGateState(command);
+    return {
+      ...command,
+      value: shouldClose ? "close" : "open",
+      label: shouldClose ? "Zatvori rampu" : "Otvori rampu",
+      icon: shouldClose ? "arrow-down" : "arrow-up"
+    };
+  }
+
+  if (command.name.includes("buzzer.enabled")) {
+    const shouldEnable = !getCommandBuzzerState(command);
+    return {
+      ...command,
+      value: shouldEnable,
+      label: shouldEnable ? "Buzzer ON" : "Buzzer OFF",
+      icon: shouldEnable ? "volume-2" : "volume-x"
+    };
+  }
+
+  return command;
+}
+
+function canUseCommand(command) {
+  if (!db) {
+    return false;
+  }
+
+  return !command.requiresVehicle || getCommandVehicleState(command);
+}
+
+function renderCommandGroup(container, commands) {
+  container.innerHTML = commands
+    .map((baseCommand, index) => {
+      const command = resolveCommand(baseCommand);
+      const disabled = canUseCommand(baseCommand) ? "" : "disabled";
+      const title = baseCommand.requiresVehicle && !getCommandVehicleState(baseCommand)
+        ? "Dostupno kada senzor detektuje vozilo"
+        : "";
+
+      return `
+        <button class="action-button" data-command-index="${index}" data-tone="${command.tone}" type="button" title="${title}" ${disabled}>
+          <span class="action-icon"><i data-lucide="${command.icon}" aria-hidden="true"></i></span>
+          <strong>${command.label}</strong>
+        </button>
+      `;
+    })
+    .join("");
+
+  container.querySelectorAll("[data-command-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const command = resolveCommand(commands[Number(button.dataset.commandIndex)]);
+      sendCommand(command);
+    });
+  });
+}
+
+function renderCommandButtons() {
+  renderCommandGroup(elements.commandGrid, entryCommands);
+  renderCommandGroup(elements.exitCommandGrid, exitCommands);
+  refreshIcons();
+}
+
+async function syncCommandConfig(command) {
+  if (command.name === "buzzer.enabled") {
+    await update(ref(db, devicePath("config")), {
+      buzzerEnabled: Boolean(command.value),
+      updatedAt: serverTimestamp(),
+      updatedBy: "web"
+    });
+  }
+
+  if (command.name === "gate2.buzzer.enabled") {
+    await update(ref(db, devicePath("config")), {
+      gate2BuzzerEnabled: Boolean(command.value),
+      updatedAt: serverTimestamp(),
+      updatedBy: "web"
+    });
+  }
+}
+
+async function sendCommand(command) {
+  if (!db) {
+    setConnectionStatus("Unesi Firebase config", "error");
+    return;
+  }
+
+  if (command.requiresVehicle && !getCommandVehicleState(command)) {
+    return;
+  }
+
+  try {
+    const commandRef = push(ref(db, devicePath("commands")));
+    const payload = {
+      name: command.name,
+      value: command.value,
+      ramp: command.ramp,
+      timestamp: serverTimestamp(),
+      source: "web",
+      requestId: crypto.randomUUID ? crypto.randomUUID() : commandRef.key
+    };
+
+    if (command.name.endsWith(".position")) {
+      payload.openMs = getGateOpenMs(command.ramp);
+    }
+
+    await set(commandRef, payload);
+    await syncCommandConfig(command);
+  } catch (error) {
+    console.error(error);
+    setConnectionStatus("Slanje nije uspelo", "error");
+  }
+}
+
+function getCommandTarget(command) {
+  if (command.ramp === "exit" || command.name.startsWith("gate2.")) {
+    return "Izlaz 01";
+  }
+
+  return "Ulaz 01";
 }
 
 function getCommandPresentation(command) {
+  const target = getCommandTarget(command);
   const name = command.name;
   const value = command.value;
 
-  if (name === "gate.access" && value === "allow") {
-    return { title: "Prolaz dozvoljen", subtitle: "Operator", icon: "check", tone: "success" };
+  if (name.endsWith(".access") && value === "allow") {
+    return { title: `Pristup dozvoljen - ${target}`, subtitle: "Operator", icon: "arrow-up", tone: "success" };
   }
 
-  if (name === "gate.access" && value === "deny") {
-    return { title: "Zabranjen prolaz", subtitle: "Vratite se", icon: "hand", tone: "danger" };
+  if (name.endsWith(".access") && value === "deny") {
+    return { title: `Pristup zabranjen - ${target}`, subtitle: "Operator", icon: "hand", tone: "danger" };
   }
 
-  if (name === "gate.position" && value === "open") {
-    return { title: "Rampa otvorena", subtitle: "Operator", icon: "arrow-up", tone: "primary" };
+  if (name.endsWith(".position") && value === "open") {
+    return { title: `${target} otvorena`, subtitle: "Operator", icon: "arrow-up", tone: "primary" };
   }
 
-  if (name === "gate.position" && value === "close") {
-    return { title: "Rampa zatvorena", subtitle: "Operator", icon: "arrow-down", tone: "info" };
+  if (name.endsWith(".position") && value === "close") {
+    return { title: `${target} zatvorena`, subtitle: "Operator", icon: "arrow-down", tone: "primary" };
   }
 
-  if (name === "buzzer.enabled") {
+  if (name.includes("buzzer.enabled")) {
     return value === true || value === "true"
-      ? { title: "Buzzer ukljucen", subtitle: "Operator", icon: "volume-2", tone: "warning" }
-      : { title: "Buzzer iskljucen", subtitle: "Operator", icon: "volume-x", tone: "warning" };
+      ? { title: `Buzzer ukljucen - ${target}`, subtitle: "Operator", icon: "volume-2", tone: "warning" }
+      : { title: `Buzzer iskljucen - ${target}`, subtitle: "Operator", icon: "volume-x", tone: "warning" };
   }
 
   if (name === "state.publish") {
@@ -244,122 +565,72 @@ function getCommandPresentation(command) {
   };
 }
 
-function resolveCommand(command) {
-  if (command.id !== "toggleGate") {
-    if (command.id !== "toggleBuzzer") {
-      return command;
-    }
-
-    const shouldEnable = !currentBuzzerEnabled;
-    return {
-      ...command,
-      value: shouldEnable,
-      label: shouldEnable ? "Buzzer ON" : "Buzzer OFF",
-      icon: shouldEnable ? "volume-2" : "volume-x"
-    };
-  }
-
-  const shouldClose = currentGateOpen;
-  return {
-    ...command,
-    value: shouldClose ? "close" : "open",
-    label: shouldClose ? "Zatvori rampu" : "Otvori rampu",
-    icon: shouldClose ? "arrow-down" : "arrow-up"
-  };
+function escapeCsvValue(value) {
+  const text = formatValue(value).replaceAll('"', '""');
+  return `"${text}"`;
 }
 
-function canUseCommand(command) {
-  if (!db) {
-    return false;
-  }
-
-  return !command.requiresVehicle || currentHasVehicle;
+function toCsvRow(values) {
+  return values.map(escapeCsvValue).join(",");
 }
 
-function renderCommandButtons() {
-  elements.commandGrid.innerHTML = commandDefinitions
-    .map((baseCommand, index) => {
-      const command = resolveCommand(baseCommand);
-      const disabled = canUseCommand(baseCommand) ? "" : "disabled";
-      const title = baseCommand.requiresVehicle && !currentHasVehicle ? "Dostupno kada senzor detektuje vozilo" : "";
+function exportDailyReport() {
+  const now = new Date();
+  const rows = [
+    ["Dnevni izvestaj parking rampe"],
+    ["Datum", new Intl.DateTimeFormat("sr-RS", { dateStyle: "medium" }).format(now)],
+    ["ESP32 konekcija", latestState && isEspOnline(latestState) ? "Online" : "Offline"],
+    ["Komandi danas", todayCommands.length],
+    [],
+    ["Datum", "Vreme", "Rampa", "Komanda", "Vrednost", "Izvor", "Request ID"]
+  ];
 
-      return `
-      <button class="action-button" data-command-index="${index}" data-tone="${command.tone}" type="button" title="${title}" ${disabled}>
-        <span class="action-icon"><i data-lucide="${command.icon}" aria-hidden="true"></i></span>
-        <strong>${command.label}</strong>
-      </button>
-    `;
-    })
-    .join("");
-
-  elements.commandGrid.querySelectorAll("[data-command-index]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const command = resolveCommand(commandDefinitions[Number(button.dataset.commandIndex)]);
-      sendCommand(command);
-    });
+  todayCommands.forEach((command) => {
+    rows.push([
+      formatShortDate(command.timestamp),
+      formatClock(command.timestamp),
+      getCommandTarget(command),
+      command.name,
+      command.value,
+      command.source || "--",
+      command.requestId || command.id || "--"
+    ]);
   });
 
-  refreshIcons();
+  const csv = `\uFEFFsep=,\r\n${rows.map(toCsvRow).join("\r\n")}\r\n`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `parking-izvestaj-${formatFileDate(now)}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
-async function sendCommand(command) {
-  if (!db) {
-    setConnectionStatus("Unesi Firebase config", "error");
-    return;
-  }
-
-  if (command.requiresVehicle && !currentHasVehicle) {
-    return;
-  }
-
-  try {
-    const commandRef = push(ref(db, devicePath("commands")));
-    const payload = {
-      name: command.name,
-      value: command.value,
-      timestamp: serverTimestamp(),
-      source: "web",
-      requestId: crypto.randomUUID ? crypto.randomUUID() : commandRef.key
-    };
-
-    if (command.includeDuration) {
-      payload.durationMs = getGateOpenMs();
-    }
-
-    await set(commandRef, payload);
-
-    if (command.name === "buzzer.enabled") {
-      await update(ref(db, devicePath("config")), {
-        buzzerEnabled: Boolean(command.value),
-        updatedAt: serverTimestamp(),
-        updatedBy: "web"
-      });
-    }
-  } catch (error) {
-    console.error(error);
-    setConnectionStatus("Slanje nije uspelo", "error");
-  }
+function renderDistance(valueElement, metaElement, distanceCm) {
+  const text = getDistanceText(distanceCm);
+  valueElement.textContent = text;
+  metaElement.textContent = `Udaljenost: ${text === "--" ? "--" : `${text} cm`}`;
 }
 
 function renderState(state) {
   latestState = state;
 
   if (!state) {
-    currentGateOpen = false;
-    currentHasVehicle = false;
-    currentBuzzerEnabled = false;
-    elements.gateState.textContent = "--";
-    elements.gateState.classList.remove("is-open");
-    elements.gateSubtitle.textContent = "Nema podataka";
-    elements.gateStatusOrb.classList.remove("is-open");
+    currentEntryGateOpen = false;
+    currentExitGateOpen = false;
+    currentEntryHasVehicle = false;
+    currentExitHasVehicle = false;
+    currentEntryBuzzerEnabled = false;
+    currentExitBuzzerEnabled = false;
     elements.gateArm.classList.remove("is-open");
+    elements.carShape.classList.add("is-hidden");
     elements.vehicleTitle.textContent = "Nema vozila";
     elements.vehicleSubtitle.textContent = "Ceka se senzor udaljenosti";
-    elements.carShape.classList.add("is-hidden");
-    elements.distanceValue.textContent = "--";
-    elements.distanceMeta.textContent = "Udaljenost: --";
-    elements.buzzerState.textContent = "--";
-    elements.lastUpdate.textContent = "--";
+    renderDistance(elements.distanceValue, elements.distanceMeta, null);
+    renderDistance(elements.exitDistanceValue, elements.exitDistanceMeta, null);
     elements.lastCommandValue.textContent = "--";
     renderEspConnection(null);
     renderCommandButtons();
@@ -367,29 +638,22 @@ function renderState(state) {
     return;
   }
 
-  const gateValue = state.gate || state.gatePosition || state.position;
-  const isGateOpen = gateValue === "open" || gateValue === true;
-  const distanceText = getDistanceText(state.distanceCm);
-  const hasVehicle = typeof state.carPresent === "boolean"
-    ? state.carPresent
-    : typeof state.distanceCm === "number" && state.distanceCm > 0;
+  const entry = extractEntryState(state);
+  const exit = extractExitState(state);
 
-  currentGateOpen = isGateOpen;
-  currentHasVehicle = hasVehicle;
-  currentBuzzerEnabled = Boolean(state.buzzerEnabled);
-  elements.gateState.textContent = isGateOpen ? "Otvorena" : "Zatvorena";
-  elements.gateState.classList.toggle("is-open", isGateOpen);
-  elements.gateSubtitle.textContent = isGateOpen ? "Rampa je podignuta" : "Rampa je spustena";
-  elements.gateStatusOrb.classList.toggle("is-open", isGateOpen);
-  elements.gateStatusOrb.innerHTML = `<i data-lucide="${isGateOpen ? "door-open" : "door-closed"}"></i>`;
-  elements.gateArm.classList.toggle("is-open", isGateOpen);
-  elements.vehicleTitle.textContent = hasVehicle ? "Vozilo detektovano" : "Nema vozila";
-  elements.vehicleSubtitle.textContent = hasVehicle ? "Auto je ispred rampe" : "Ceka se senzor udaljenosti";
-  elements.carShape.classList.toggle("is-hidden", !hasVehicle);
-  elements.distanceValue.textContent = distanceText;
-  elements.distanceMeta.textContent = `Udaljenost: ${distanceText === "--" ? "--" : `${distanceText} cm`}`;
-  elements.buzzerState.textContent = state.buzzerEnabled ? "Ukljucen" : "Iskljucen";
-  elements.lastUpdate.textContent = formatClock(state.updatedAt);
+  currentEntryGateOpen = entry.gateOpen;
+  currentExitGateOpen = exit.gateOpen;
+  currentEntryHasVehicle = entry.carPresent;
+  currentExitHasVehicle = exit.carPresent;
+  currentEntryBuzzerEnabled = entry.buzzerEnabled;
+  currentExitBuzzerEnabled = exit.buzzerEnabled;
+
+  elements.gateArm.classList.toggle("is-open", entry.gateOpen);
+  elements.carShape.classList.toggle("is-hidden", !entry.carPresent);
+  elements.vehicleTitle.textContent = entry.carPresent ? "Vozilo detektovano" : "Nema vozila";
+  elements.vehicleSubtitle.textContent = entry.carPresent ? "Auto je ispred ulazne rampe" : "Ceka se senzor udaljenosti";
+  renderDistance(elements.distanceValue, elements.distanceMeta, entry.distanceCm);
+  renderDistance(elements.exitDistanceValue, elements.exitDistanceMeta, exit.distanceCm);
 
   const lastCommand = state.lastProcessedCommand || {};
   elements.lastCommandValue.textContent = `${formatValue(lastCommand.name)} / ${formatValue(lastCommand.value)}`;
@@ -399,21 +663,61 @@ function renderState(state) {
 }
 
 function renderConfig(config) {
+  latestConfig = config;
+
   if (!config) {
+    elements.entryAutoToggle.checked = false;
+    elements.exitAutoToggle.checked = true;
+    elements.entryDetectionDistanceInput.value = 25;
+    elements.entryGateOpenMsInput.value = 4000;
+    elements.exitDetectDistanceInput.value = 30;
+    elements.exitOpenDistanceInput.value = 20;
+    elements.exitGateOpenMsInput.value = 4000;
+    elements.rgbIdleColorInput.value = "blue";
+    elements.rgbWaitingColorInput.value = "yellow";
+    elements.rgbOpenColorInput.value = "green";
+    elements.rgbDeniedColorInput.value = "red";
+    updateColorFields();
     return;
   }
 
-  if (config.detectionDistanceCm) {
-    elements.detectionDistanceInput.value = clampNumber(config.detectionDistanceCm, 25, 5, 200);
-  }
+  elements.entryDetectionDistanceInput.value = clampNumber(
+    firstDefined(config.entryDetectionDistanceCm, config.detectionDistanceCm),
+    25,
+    5,
+    200
+  );
+  elements.entryGateOpenMsInput.value = clampNumber(
+    firstDefined(config.entryGateOpenMs, config.gateOpenMs),
+    4000,
+    1000,
+    30000
+  );
+  elements.exitDetectDistanceInput.value = clampNumber(config.exitDetectDistanceCm, 30, 5, 150);
+  const exitDetectDistanceCm = getExitDetectDistanceCm();
+  elements.exitOpenDistanceInput.value = clampNumber(
+    config.exitOpenDistanceCm,
+    Math.min(20, exitDetectDistanceCm),
+    5,
+    exitDetectDistanceCm
+  );
+  elements.exitGateOpenMsInput.value = clampNumber(
+    firstDefined(config.exitGateOpenMs, config.gateOpenMs),
+    4000,
+    1000,
+    30000
+  );
+  elements.rgbIdleColorInput.value = getConfigColor(config.entryRgbIdleColor, "blue");
+  elements.rgbWaitingColorInput.value = getConfigColor(config.entryRgbWaitingColor, "yellow");
+  elements.rgbOpenColorInput.value = getConfigColor(config.entryRgbOpenColor, "green");
+  elements.rgbDeniedColorInput.value = getConfigColor(config.entryRgbDeniedColor, "red");
 
-  if (config.gateOpenMs) {
-    elements.gateOpenMsInput.value = clampNumber(config.gateOpenMs, 4000, 1000, 30000);
-  }
-
+  elements.entryAutoToggle.checked = Boolean(config.entryAutoEnabled);
+  elements.exitAutoToggle.checked = config.exitAutoEnabled !== false;
+  updateColorFields();
 }
 
-function renderActivityRows(commands) {
+function renderActivityRows(commands, options = {}) {
   if (!commands.length) {
     return `<div class="empty-state">Jos nema aktivnosti.</div>`;
   }
@@ -421,9 +725,13 @@ function renderActivityRows(commands) {
   return commands
     .map((command) => {
       const presentation = getCommandPresentation(command);
+      const timeContent = options.showDate
+        ? `<span class="activity-date">${formatShortDate(command.timestamp)}</span><span>${formatClock(command.timestamp)}</span>`
+        : formatClock(command.timestamp);
+
       return `
         <div class="activity-row">
-          <span class="activity-time">${formatClock(command.timestamp)}</span>
+          <span class="activity-time">${timeContent}</span>
           <span class="activity-icon ${presentation.tone}">
             <i data-lucide="${presentation.icon}" aria-hidden="true"></i>
           </span>
@@ -438,16 +746,15 @@ function renderActivityRows(commands) {
 }
 
 function renderCommandLog() {
-  elements.commandLog.innerHTML = renderActivityRows(recentCommands.slice(0, 7));
-  elements.toggleActivitiesButton.disabled = false;
-  elements.toggleActivitiesButton.textContent = "Pogledaj sve";
+  const visibleCommands = recentCommands.slice(0, 7);
+  elements.commandLog.innerHTML = renderActivityRows(visibleCommands);
+  elements.activityUpdatedAt.textContent = visibleCommands.length ? formatClock(visibleCommands[0].timestamp) : "--";
   renderAllCommandLog();
-
   refreshIcons();
 }
 
 function renderAllCommandLog() {
-  elements.allCommandLog.innerHTML = renderActivityRows(recentCommands);
+  elements.allCommandLog.innerHTML = renderActivityRows(recentCommands, { showDate: true });
 }
 
 function openActivitiesModal() {
@@ -462,6 +769,18 @@ function closeActivitiesModal() {
   document.body.classList.remove("modal-open");
 }
 
+function openSettingsModal() {
+  elements.settingsModal.hidden = false;
+  document.body.classList.add("modal-open");
+  updateColorFields();
+  refreshIcons();
+}
+
+function closeSettingsModal() {
+  elements.settingsModal.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
 function detachListeners() {
   activeUnsubscribers.forEach((unsubscribe) => unsubscribe());
   activeUnsubscribers = [];
@@ -469,6 +788,15 @@ function detachListeners() {
 
 function listen(refObject, callback) {
   activeUnsubscribers.push(onValue(refObject, callback));
+}
+
+function resetDashboardState() {
+  latestState = null;
+  recentCommands = [];
+  todayCommands = [];
+  elements.todayCommandCount.textContent = "0";
+  renderState(null);
+  renderCommandLog();
 }
 
 function connectToDevice() {
@@ -484,11 +812,7 @@ function connectToDevice() {
 
   activeDeviceId = nextDeviceId;
   detachListeners();
-  latestState = null;
-  currentGateOpen = false;
-  currentHasVehicle = false;
-  renderEspConnection(null);
-  renderCommandButtons();
+  resetDashboardState();
 
   const stateRef = ref(db, devicePath("state"));
   const configRef = ref(db, devicePath("config"));
@@ -508,8 +832,13 @@ function connectToDevice() {
   });
   listen(todayCommandsRef, (snapshot) => {
     const value = snapshot.val();
-    const commands = value ? Object.values(value) : [];
-    elements.todayCommandCount.textContent = String(commands.filter((command) => isToday(command.timestamp)).length);
+    todayCommands = value
+      ? Object.entries(value)
+        .map(([id, command]) => ({ id, ...command }))
+        .filter((command) => isToday(command.timestamp))
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+      : [];
+    elements.todayCommandCount.textContent = String(todayCommands.length);
   });
 }
 
@@ -522,52 +851,119 @@ async function saveConfig(event) {
   }
 
   try {
+    const entryDetectionDistanceCm = getEntryDetectionDistanceCm();
+    const entryGateOpenMs = getGateOpenMs("entry");
+    const exitDetectDistanceCm = getExitDetectDistanceCm();
+    const exitOpenDistanceCm = getExitOpenDistanceCm();
+    const exitGateOpenMs = getGateOpenMs("exit");
+
     await update(ref(db, devicePath("config")), {
-      detectionDistanceCm: clampNumber(elements.detectionDistanceInput.value, 25, 5, 200),
-      gateOpenMs: getGateOpenMs(),
+      detectionDistanceCm: entryDetectionDistanceCm,
+      entryDetectionDistanceCm,
+      exitDetectDistanceCm,
+      exitOpenDistanceCm,
+      gateOpenMs: entryGateOpenMs,
+      entryGateOpenMs,
+      exitGateOpenMs,
+      entryAutoEnabled: elements.entryAutoToggle.checked,
+      exitAutoEnabled: elements.exitAutoToggle.checked,
+      entryRgbIdleColor: getRgbValue(elements.rgbIdleColorInput, "blue"),
+      entryRgbWaitingColor: getRgbValue(elements.rgbWaitingColorInput, "yellow"),
+      entryRgbOpenColor: getRgbValue(elements.rgbOpenColorInput, "green"),
+      entryRgbDeniedColor: getRgbValue(elements.rgbDeniedColorInput, "red"),
       updatedAt: serverTimestamp(),
       updatedBy: "web"
     });
-
+    closeSettingsModal();
   } catch (error) {
     console.error(error);
     setConnectionStatus("Config nije sacuvan", "error");
   }
 }
 
+async function saveAutoModeConfig() {
+  if (!db) {
+    setConnectionStatus("Unesi Firebase config", "error");
+    renderConfig(null);
+    return;
+  }
+
+  try {
+    await update(ref(db, devicePath("config")), {
+      entryAutoEnabled: elements.entryAutoToggle.checked,
+      exitAutoEnabled: elements.exitAutoToggle.checked,
+      updatedAt: serverTimestamp(),
+      updatedBy: "web"
+    });
+  } catch (error) {
+    console.error(error);
+    setConnectionStatus("Auto rezim nije sacuvan", "error");
+  }
+}
+
 function init() {
   renderCommandButtons();
   renderCommandLog();
+  renderState(null);
+  renderConfig(null);
+
   elements.connectButton.addEventListener("click", connectToDevice);
   elements.configForm.addEventListener("submit", saveConfig);
+  elements.entryAutoToggle.addEventListener("change", saveAutoModeConfig);
+  elements.exitAutoToggle.addEventListener("change", saveAutoModeConfig);
+  elements.openSettingsModal.addEventListener("click", openSettingsModal);
+  elements.closeSettingsModal.addEventListener("click", closeSettingsModal);
+  elements.exportDailyReportButton.addEventListener("click", exportDailyReport);
   elements.toggleActivitiesButton.addEventListener("click", openActivitiesModal);
   elements.closeActivitiesModal.addEventListener("click", closeActivitiesModal);
+  [
+    elements.rgbIdleColorInput,
+    elements.rgbWaitingColorInput,
+    elements.rgbOpenColorInput,
+    elements.rgbDeniedColorInput
+  ].forEach((input) => input.addEventListener("change", () => updateColorField(input)));
   elements.activitiesModal.addEventListener("click", (event) => {
     if (event.target === elements.activitiesModal) {
       closeActivitiesModal();
     }
   });
+  elements.settingsModal.addEventListener("click", (event) => {
+    if (event.target === elements.settingsModal) {
+      closeSettingsModal();
+    }
+  });
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !elements.activitiesModal.hidden) {
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    if (!elements.activitiesModal.hidden) {
       closeActivitiesModal();
+    }
+
+    if (!elements.settingsModal.hidden) {
+      closeSettingsModal();
     }
   });
   window.setInterval(() => renderEspConnection(latestState), 3000);
 
   if (!hasFirebaseConfig()) {
-    setConnectionStatus("Unesi Firebase config", "error");
+    setConnectionStatus("Firebase nije podesen", "error");
+    elements.connectionMetric.textContent = "Offline";
+    elements.connectionDetail.textContent = "Firebase config nije podesen";
     return;
   }
 
   try {
     app = initializeApp(firebaseConfig);
     db = getDatabase(app);
-    setConnectionStatus("Ceka ESP32", "warning");
     renderCommandButtons();
     connectToDevice();
   } catch (error) {
     console.error(error);
     setConnectionStatus("Firebase greska", "error");
+    elements.connectionMetric.textContent = "Offline";
+    elements.connectionDetail.textContent = "Firebase greska";
   }
 }
 
