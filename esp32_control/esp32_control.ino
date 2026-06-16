@@ -10,12 +10,12 @@
 #include "secrets.h"
 
 // ------------------------------------------------------------
-// PODESAVANJA KOJA SE MENJAJU ZA TVOJ PROJEKAT
+// OSNOVNA PODESAVANJA PROJEKTA
 // ------------------------------------------------------------
 const char* DEVICE_ID = "esp32_1";
 
 // ------------------------------------------------------------
-// GPIO mapa. Ako dodajes novi senzor, izlaz ili dugme, kreni odavde.
+// GPIO mapa za senzore, izlaze i komandna dugmad.
 // ------------------------------------------------------------
 namespace Pins {
   // Prva rampa - ulaz
@@ -87,11 +87,20 @@ const unsigned long COMMAND_POLL_INTERVAL_MS = 1000;
 const unsigned long STATE_PUBLISH_INTERVAL_MS = 2000;
 const unsigned long CONFIG_POLL_INTERVAL_MS = 10000;
 const unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
-const unsigned long BUTTON_DEBOUNCE_MS = 45;
-const unsigned long EXIT_BUZZER_BEEP_MS = 180;
+const unsigned long FIREBASE_HTTP_TIMEOUT_MS = 1200;
+const unsigned long BUTTON_DEBOUNCE_MS = 30;
+const unsigned long EXIT_BUZZER_BEEP_MS = 90;
 const unsigned long ENTRY_DENIED_SIGNAL_MS = 2000;
 const unsigned long ENTRY_RGB_BLINK_MS = 400;
-const bool RGB_COMMON_ANODE = false; // Ako RGB LED svetli obrnuto, promeni na true.
+const unsigned int ENTRY_BUZZER_FREQUENCY_HZ = 900;
+const unsigned long ENTRY_ECHO_TIMEOUT_US = 25000;
+const int ENTRY_ULTRASONIC_SAMPLES = 3;
+const int SHARP_SAMPLES = 15;
+const float SHARP_MIN_VALID_CM = 8.0;
+const float SHARP_MAX_VALID_CM = 250.0;
+const bool BUTTON_ACTIVE_LOW = true; // INPUT_PULLUP: dugme spaja GPIO na GND kada se pritisne.
+const bool RGB_COMMON_ANODE = false; // True za common anode RGB LED, false za common cathode RGB LED.
+const bool RGB_SELF_TEST_ON_BOOT = true;
 
 float entryDistanceCm = -1;
 float exitDistanceCm = -1;
@@ -143,6 +152,9 @@ bool handleCommand(const String& commandName, const String& value);
 bool handleCommand(const String& commandName, const String& value, const String& source);
 float measureEntryDistanceCm();
 float measureExitSharpDistanceCm();
+bool isButtonPressed(const ButtonMapping& button);
+void setEntryRgbColor(const String& color);
+void runEntryRgbSelfTest();
 
 void setup() {
   Serial.begin(115200);
@@ -153,7 +165,7 @@ void setup() {
   lastRemoteCommandId = preferences.getString("lastCmdId", "");
   lastRemoteCommandTimestamp = preferences.getULong64("lastCmdTs", 0);
 
-  secureClient.setInsecure(); // Za skolski prototip. Za produkciju koristi validan CA sertifikat.
+  secureClient.setInsecure(); // U prototipu se koristi bez CA sertifikata.
 
   Serial.println("Pametni parking sistem pokrenut.");
   Serial.println("Rampa 1: HC-SR04 + servo + pasivni buzzer + dugmad.");
@@ -213,12 +225,22 @@ void setupPins() {
   analogSetPinAttenuation(Pins::SHARP, ADC_11db);
 
   for (ButtonMapping& button : buttons) {
-    pinMode(button.pin, INPUT_PULLUP);
+    pinMode(button.pin, BUTTON_ACTIVE_LOW ? INPUT_PULLUP : INPUT_PULLDOWN);
+    const bool pressed = isButtonPressed(button);
+    button.lastReadingPressed = pressed;
+    button.stablePressed = pressed;
+    button.lastChangeMs = millis();
   }
 
   digitalWrite(Pins::BUZZER_EXIT, LOW);
   digitalWrite(Pins::RED_LED_EXIT, HIGH);
   digitalWrite(Pins::GREEN_LED_EXIT, LOW);
+
+  if (RGB_SELF_TEST_ON_BOOT) {
+    runEntryRgbSelfTest();
+  }
+
+  setEntryRgbColor(config.entryRgbIdleColor);
 }
 
 void setupServos() {
@@ -295,7 +317,7 @@ bool firebaseGet(const String& path, const String& query, String& payload) {
   }
 
   HTTPClient http;
-  http.setTimeout(5000);
+  http.setTimeout(FIREBASE_HTTP_TIMEOUT_MS);
   http.begin(secureClient, firebaseUrl(path, query));
 
   const int statusCode = http.GET();
@@ -319,7 +341,7 @@ bool firebasePatch(const String& path, const String& payload) {
   }
 
   HTTPClient http;
-  http.setTimeout(5000);
+  http.setTimeout(FIREBASE_HTTP_TIMEOUT_MS);
   http.begin(secureClient, firebaseUrl(path));
   http.addHeader("Content-Type", "application/json");
 
@@ -651,7 +673,7 @@ void updateSensors() {
 
   entryCarPresent = entryDistanceCm > 0 && entryDistanceCm <= config.detectionDistanceCm;
   exitDistanceCm = measuredExitDistanceCm > 0 ? measuredExitDistanceCm : -1;
-  exitCarPresent = exitDistanceCm > 0;
+  exitCarPresent = exitDistanceCm > 0 && exitDistanceCm <= config.exitDetectDistanceCm;
 
   static unsigned long lastPrintMs = 0;
   const unsigned long now = millis();
@@ -688,7 +710,7 @@ void updateButtons() {
   const unsigned long now = millis();
 
   for (ButtonMapping& button : buttons) {
-    const bool readingPressed = digitalRead(button.pin) == LOW;
+    const bool readingPressed = isButtonPressed(button);
 
     if (readingPressed != button.lastReadingPressed) {
       button.lastReadingPressed = readingPressed;
@@ -704,12 +726,19 @@ void updateButtons() {
 
       if (button.stablePressed) {
         Serial.print("Fizicko dugme: ");
-        Serial.println(button.label);
+        Serial.print(button.label);
+        Serial.print(" na GPIO ");
+        Serial.println(button.pin);
         handleCommand(button.commandName, button.value, "physical");
         publishState("physicalButton");
       }
     }
   }
+}
+
+bool isButtonPressed(const ButtonMapping& button) {
+  const int state = digitalRead(button.pin);
+  return BUTTON_ACTIVE_LOW ? state == LOW : state == HIGH;
 }
 
 void setExitIndicators() {
@@ -787,7 +816,7 @@ void closeExitGate() {
 
 void updateAutoOpenGates() {
   const bool entryAutoZoneActive = entryCarPresent && entryDistanceCm <= config.entryOpenDistanceCm;
-  const bool exitOpenZoneActive = exitDistanceCm > 0 && exitDistanceCm <= config.exitOpenDistanceCm;
+  const bool exitOpenZoneActive = exitCarPresent && exitDistanceCm <= config.exitOpenDistanceCm;
 
   if (config.entryAutoEnabled && entryAutoZoneActive && !entryAutoZonePreviouslyActive && !entryGateOpen) {
     Serial.print("Auto dosao na ulazni prag ");
@@ -870,7 +899,7 @@ void updateParkingBuzzer() {
 
   if (entryDistanceCm <= stopDistance) {
     if (!continuousToneActive) {
-      tone(Pins::BUZZER_ENTRY, 1500);
+      tone(Pins::BUZZER_ENTRY, ENTRY_BUZZER_FREQUENCY_HZ);
     }
 
     continuousToneActive = true;
@@ -912,7 +941,7 @@ void updateParkingBuzzer() {
   }
 
   if (now >= nextBeepMs) {
-    tone(Pins::BUZZER_ENTRY, 1500);
+    tone(Pins::BUZZER_ENTRY, ENTRY_BUZZER_FREQUENCY_HZ);
     beepActive = true;
     beepStartedMs = now;
   }
@@ -979,6 +1008,18 @@ void setEntryRgbColor(const String& color) {
   } else {
     setEntryRgb(false, false, false);
   }
+}
+
+void runEntryRgbSelfTest() {
+  Serial.println("RGB test: crvena, zelena, plava.");
+  setEntryRgbColor("red");
+  delay(180);
+  setEntryRgbColor("green");
+  delay(180);
+  setEntryRgbColor("blue");
+  delay(180);
+  setEntryRgb(false, false, false);
+  delay(120);
 }
 
 void updateEntryRgb() {
@@ -1134,30 +1175,69 @@ bool handleCommand(const String& commandName, const String& value, const String&
 }
 
 float measureEntryDistanceCm() {
-  digitalWrite(Pins::TRIG, LOW);
-  delayMicroseconds(2);
+  float samples[ENTRY_ULTRASONIC_SAMPLES];
+  int validCount = 0;
 
-  digitalWrite(Pins::TRIG, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(Pins::TRIG, LOW);
+  for (int i = 0; i < ENTRY_ULTRASONIC_SAMPLES; i++) {
+    digitalWrite(Pins::TRIG, LOW);
+    delayMicroseconds(2);
 
-  const long duration = pulseIn(Pins::ECHO, HIGH, 30000);
-  if (duration == 0) {
+    digitalWrite(Pins::TRIG, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(Pins::TRIG, LOW);
+
+    const unsigned long duration = pulseIn(Pins::ECHO, HIGH, ENTRY_ECHO_TIMEOUT_US);
+    if (duration > 0) {
+      samples[validCount] = duration * 0.0343 / 2;
+      validCount++;
+    }
+
+    delay(5);
+  }
+
+  if (validCount == 0) {
     return -1;
   }
 
-  return duration * 0.0343 / 2;
+  for (int i = 0; i < validCount - 1; i++) {
+    for (int j = i + 1; j < validCount; j++) {
+      if (samples[j] < samples[i]) {
+        const float temp = samples[i];
+        samples[i] = samples[j];
+        samples[j] = temp;
+      }
+    }
+  }
+
+  return samples[validCount / 2];
 }
 
 float measureExitSharpDistanceCm() {
-  long sum = 0;
+  int samples[SHARP_SAMPLES];
 
-  for (int i = 0; i < 10; i++) {
-    sum += analogRead(Pins::SHARP);
+  for (int i = 0; i < SHARP_SAMPLES; i++) {
+    samples[i] = analogRead(Pins::SHARP);
     delay(2);
   }
 
-  const float raw = sum / 10.0;
+  for (int i = 0; i < SHARP_SAMPLES - 1; i++) {
+    for (int j = i + 1; j < SHARP_SAMPLES; j++) {
+      if (samples[j] < samples[i]) {
+        const int temp = samples[i];
+        samples[i] = samples[j];
+        samples[j] = temp;
+      }
+    }
+  }
+
+  long sum = 0;
+  const int first = 2;
+  const int last = SHARP_SAMPLES - 2;
+  for (int i = first; i < last; i++) {
+    sum += samples[i];
+  }
+
+  const float raw = sum / (float)(last - first);
   const float voltage = raw * (3.3 / 4095.0);
 
   if (voltage <= 0.1) {
@@ -1165,9 +1245,9 @@ float measureExitSharpDistanceCm() {
   }
 
   // Priblizna formula za Sharp GP2Y0A02YK0F.
-  // Ne odbacujemo vrednosti po opsegu, da bi se videlo svako realno ocitavanje senzora.
+  // Senzor je najpouzdaniji za oko 20-150 cm, a ovde odbacujemo samo ocigledno nerealna ocitavanja.
   const float distance = 80.8 * pow(voltage, -1.40);
-  if (distance <= 0) {
+  if (distance < SHARP_MIN_VALID_CM || distance > SHARP_MAX_VALID_CM) {
     return -1;
   }
 

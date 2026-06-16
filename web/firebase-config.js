@@ -1,5 +1,5 @@
 // Firebase konfiguracija za web aplikaciju.
-// Vrednosti kopiraj iz Firebase Console: Project settings > Your apps > Web app.
+// Vrednosti se nalaze u Firebase Console: Project settings > Your apps > Web app.
 export const firebaseConfig = {
   apiKey: "AIzaSyDPnzM8FXSo1pTyvv4PLJw-sAgKePpDTZE",
   authDomain: "esp32-parking-gate.firebaseapp.com",

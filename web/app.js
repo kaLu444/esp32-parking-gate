@@ -23,7 +23,8 @@ const entryCommands = [
     label: "Dozvoli pristup",
     icon: "arrow-up",
     tone: "success",
-    requiresVehicle: true
+    requiresVehicle: true,
+    manualOnly: true
   },
   {
     id: "entryDeny",
@@ -33,7 +34,8 @@ const entryCommands = [
     label: "Zabrani pristup",
     icon: "hand",
     tone: "danger",
-    requiresVehicle: true
+    requiresVehicle: true,
+    manualOnly: true
   },
   {
     id: "entryGate",
@@ -64,7 +66,8 @@ const exitCommands = [
     label: "Dozvoli izlaz",
     icon: "arrow-up",
     tone: "success",
-    requiresVehicle: true
+    requiresVehicle: true,
+    manualOnly: true
   },
   {
     id: "exitDeny",
@@ -74,7 +77,8 @@ const exitCommands = [
     label: "Zabrani izlaz",
     icon: "hand",
     tone: "danger",
-    requiresVehicle: true
+    requiresVehicle: true,
+    manualOnly: true
   },
   {
     id: "exitGate",
@@ -454,6 +458,10 @@ function isGateOpen(value) {
 }
 
 function inferVehicle(carPresent, distanceCm, detectionDistance) {
+  if (typeof distanceCm === "number" && distanceCm > detectionDistance) {
+    return false;
+  }
+
   if (typeof carPresent === "boolean") {
     return carPresent;
   }
@@ -512,6 +520,26 @@ function getCommandBuzzerState(command) {
   return command.ramp === "exit" ? currentExitBuzzerEnabled : currentEntryBuzzerEnabled;
 }
 
+function getCommandAutoState(command) {
+  return command.ramp === "exit" ? elements.exitAutoToggle.checked : elements.entryAutoToggle.checked;
+}
+
+function getCommandDisabledReason(command) {
+  if (!db) {
+    return "Unesi Firebase config";
+  }
+
+  if (command.manualOnly && getCommandAutoState(command)) {
+    return "Dostupno kada iskljucis Auto rezim";
+  }
+
+  if (command.requiresVehicle && !getCommandVehicleState(command)) {
+    return "Dostupno kada senzor detektuje vozilo";
+  }
+
+  return "";
+}
+
 function resolveCommand(command) {
   if (command.name.endsWith(".position")) {
     const shouldClose = getCommandGateState(command);
@@ -537,11 +565,7 @@ function resolveCommand(command) {
 }
 
 function canUseCommand(command) {
-  if (!db) {
-    return false;
-  }
-
-  return !command.requiresVehicle || getCommandVehicleState(command);
+  return !getCommandDisabledReason(command);
 }
 
 function renderCommandGroup(container, commands) {
@@ -549,9 +573,7 @@ function renderCommandGroup(container, commands) {
     .map((baseCommand, index) => {
       const command = resolveCommand(baseCommand);
       const disabled = canUseCommand(baseCommand) ? "" : "disabled";
-      const title = baseCommand.requiresVehicle && !getCommandVehicleState(baseCommand)
-        ? "Dostupno kada senzor detektuje vozilo"
-        : "";
+      const title = getCommandDisabledReason(baseCommand);
 
       return `
         <button class="action-button" data-command-index="${index}" data-tone="${command.tone}" type="button" title="${title}" ${disabled}>
@@ -600,7 +622,7 @@ async function sendCommand(command) {
     return;
   }
 
-  if (command.requiresVehicle && !getCommandVehicleState(command)) {
+  if (!canUseCommand(command)) {
     return;
   }
 
@@ -789,6 +811,7 @@ function renderConfig(config) {
     elements.rgbDeniedColorInput.value = "red";
     updateColorFields();
     renderCamera(getLocalCameraUrl());
+    renderCommandButtons();
     return;
   }
 
@@ -832,6 +855,7 @@ function renderConfig(config) {
   elements.exitAutoToggle.checked = config.exitAutoEnabled !== false;
   renderCamera(config.cameraYoutubeUrl || getLocalCameraUrl());
   updateColorFields();
+  renderCommandButtons();
 }
 
 function renderActivityRows(commands, options = {}) {
@@ -1073,6 +1097,8 @@ async function saveConfig(event) {
 }
 
 async function saveAutoModeConfig() {
+  renderCommandButtons();
+
   if (!db) {
     setConnectionStatus("Unesi Firebase config", "error");
     renderConfig(null);
