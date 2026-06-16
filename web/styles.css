@@ -264,6 +264,20 @@ h3 {
   background: #b9d8ef;
 }
 
+.visual-panel.has-camera::before {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  left: 24px;
+  top: 20px;
+  width: min(390px, calc(100% - 48px));
+  height: 212px;
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.68);
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.24);
+  backdrop-filter: blur(2px);
+}
+
 .scene-label {
   position: absolute;
   z-index: 6;
@@ -280,6 +294,14 @@ h3 {
   line-height: 1;
   font-weight: 950;
   text-shadow: 0 2px 12px rgba(255, 255, 255, 0.75);
+}
+
+.visual-panel.has-camera .scene-label {
+  color: #ffffff;
+}
+
+.visual-panel.has-camera .scene-label strong {
+  text-shadow: 0 2px 12px rgba(2, 6, 23, 0.8);
 }
 
 .scene-label span {
@@ -306,6 +328,11 @@ h3 {
   top: 66px;
   color: #344155;
   font-weight: 850;
+}
+
+.visual-panel.has-camera .scene-subtitle {
+  color: rgba(255, 255, 255, 0.86);
+  text-shadow: 0 2px 10px rgba(2, 6, 23, 0.72);
 }
 
 .direction-pill,
@@ -346,7 +373,16 @@ h3 {
   top: 142px;
   min-height: 42px;
   padding: 0 18px;
+  border: 0;
   background: rgba(28, 39, 57, 0.84);
+}
+
+.camera-placeholder:hover {
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.camera-placeholder.is-configured {
+  background: rgba(37, 109, 232, 0.94);
 }
 
 .camera-placeholder svg {
@@ -354,10 +390,30 @@ h3 {
   height: 20px;
 }
 
+.camera-live {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: #020617;
+}
+
+.camera-live iframe {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+}
+
+.visual-panel.has-camera .parking-scene {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .parking-scene {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  transition: opacity 180ms ease;
 }
 
 .building-wall {
@@ -1198,6 +1254,36 @@ h3 {
   width: min(900px, 100%);
 }
 
+.camera-modal-panel {
+  width: min(620px, 100%);
+}
+
+.camera-form {
+  display: grid;
+  gap: 16px;
+}
+
+.camera-status {
+  min-height: 22px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.camera-status.is-error {
+  color: var(--red-dark);
+}
+
+.camera-status.is-success {
+  color: var(--green-dark);
+}
+
+.camera-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .settings-modal-form {
   overflow: auto;
   padding-right: 4px;
@@ -1492,6 +1578,22 @@ svg {
   .camera-placeholder {
     left: 16px;
     top: 128px;
+  }
+
+  .visual-panel.has-camera::before {
+    left: 10px;
+    top: 10px;
+    width: min(310px, calc(100% - 20px));
+    height: 202px;
+  }
+
+  .camera-actions {
+    flex-direction: column-reverse;
+  }
+
+  .camera-actions .primary-button,
+  .camera-actions .secondary-button {
+    width: 100%;
   }
 
   .control-card,

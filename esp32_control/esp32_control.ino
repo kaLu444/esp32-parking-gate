@@ -44,7 +44,8 @@ namespace ServoAngle {
 
 struct RuntimeConfig {
   int detectionDistanceCm = 20;      // HC-SR04 prag za ulaznu rampu
-  int exitDetectDistanceCm = 30;     // Izlaz konstatuje auto samo do 30 cm
+  int entryOpenDistanceCm = 10;      // Ulaz se automatski otvara tek kada auto pridje ovom pragu
+  int exitDetectDistanceCm = 30;     // Ostaje u configu, ali Sharp ocitavanje se vise ne odseca po ovom pragu
   int exitOpenDistanceCm = 20;       // Izlaz se automatski otvara tek na 20 cm
   unsigned long gateOpenMs = 4000;   // Vreme privremenog otvaranja za obe rampe
   unsigned long entryGateOpenMs = 4000;
@@ -460,6 +461,7 @@ void fetchRemoteConfig() {
     DynamicJsonDocument defaults(1536);
     defaults["detectionDistanceCm"] = config.detectionDistanceCm;
     defaults["entryDetectionDistanceCm"] = config.detectionDistanceCm;
+    defaults["entryOpenDistanceCm"] = config.entryOpenDistanceCm;
     defaults["exitDetectDistanceCm"] = config.exitDetectDistanceCm;
     defaults["exitOpenDistanceCm"] = config.exitOpenDistanceCm;
     defaults["gateOpenMs"] = config.gateOpenMs;
@@ -500,13 +502,17 @@ void fetchRemoteConfig() {
     config.detectionDistanceCm = constrain(doc["entryDetectionDistanceCm"].as<int>(), 5, 200);
   }
 
+  if (doc["entryOpenDistanceCm"].is<int>()) {
+    config.entryOpenDistanceCm = constrain(doc["entryOpenDistanceCm"].as<int>(), 2, config.detectionDistanceCm);
+  }
+
   if (doc["exitDetectDistanceCm"].is<int>()) {
     config.exitDetectDistanceCm = constrain(doc["exitDetectDistanceCm"].as<int>(), 5, 150);
   }
 
   if (doc["exitOpenDistanceCm"].is<int>()) {
     const int requestedOpenDistanceCm = doc["exitOpenDistanceCm"].as<int>();
-    config.exitOpenDistanceCm = constrain(requestedOpenDistanceCm, 5, config.exitDetectDistanceCm);
+    config.exitOpenDistanceCm = constrain(requestedOpenDistanceCm, 5, 150);
   }
 
   if (doc["gateOpenMs"].is<unsigned long>()) {
@@ -562,6 +568,10 @@ void fetchRemoteConfig() {
       config.mode = remoteMode;
     }
   }
+
+  if (config.entryOpenDistanceCm > config.detectionDistanceCm) {
+    config.entryOpenDistanceCm = config.detectionDistanceCm;
+  }
 }
 
 void publishState(const String& reason) {
@@ -598,6 +608,7 @@ void publishState(const String& reason) {
   entry["autoEnabled"] = config.entryAutoEnabled;
   entry["sensor"] = "HC-SR04";
   entry["detectDistanceCm"] = config.detectionDistanceCm;
+  entry["openDistanceCm"] = config.entryOpenDistanceCm;
   entry["openMs"] = config.entryGateOpenMs;
   entry["rgb"] = getEntryRgbStateColor();
   JsonObject entryRgb = entry.createNestedObject("rgbColors");
@@ -639,9 +650,7 @@ void updateSensors() {
   const float measuredExitDistanceCm = measureExitSharpDistanceCm();
 
   entryCarPresent = entryDistanceCm > 0 && entryDistanceCm <= config.detectionDistanceCm;
-  exitDistanceCm = measuredExitDistanceCm > 0 && measuredExitDistanceCm <= config.exitDetectDistanceCm
-    ? measuredExitDistanceCm
-    : -1;
+  exitDistanceCm = measuredExitDistanceCm > 0 ? measuredExitDistanceCm : -1;
   exitCarPresent = exitDistanceCm > 0;
 
   static unsigned long lastPrintMs = 0;
@@ -662,7 +671,7 @@ void updateSensors() {
 
   Serial.print("Izlaz 01 udaljenost: ");
   if (exitDistanceCm < 0) {
-    Serial.println("van opsega");
+    Serial.println("nema ocitavanja");
   } else {
     Serial.print(exitDistanceCm);
     Serial.println(" cm");
@@ -777,11 +786,13 @@ void closeExitGate() {
 }
 
 void updateAutoOpenGates() {
-  const bool entryAutoZoneActive = entryCarPresent;
+  const bool entryAutoZoneActive = entryCarPresent && entryDistanceCm <= config.entryOpenDistanceCm;
   const bool exitOpenZoneActive = exitDistanceCm > 0 && exitDistanceCm <= config.exitOpenDistanceCm;
 
   if (config.entryAutoEnabled && entryAutoZoneActive && !entryAutoZonePreviouslyActive && !entryGateOpen) {
-    Serial.println("Auto detektovan na ulazu. Rampa 1 se automatski otvara.");
+    Serial.print("Auto dosao na ulazni prag ");
+    Serial.print(config.entryOpenDistanceCm);
+    Serial.println(" cm. Rampa 1 se automatski otvara.");
     lastActionName = "gate.access";
     lastActionValue = "allow";
     lastActionSource = "ultrasonic";
@@ -791,7 +802,9 @@ void updateAutoOpenGates() {
   }
 
   if (config.exitAutoEnabled && exitOpenZoneActive && !exitOpenZonePreviouslyActive && !exitGateOpen) {
-    Serial.println("Auto je na 20 cm od izlaza. Rampa 2 se automatski otvara.");
+    Serial.print("Auto je u zoni otvaranja izlaza (<= ");
+    Serial.print(config.exitOpenDistanceCm);
+    Serial.println(" cm). Rampa 2 se automatski otvara.");
     lastActionName = "gate2.access";
     lastActionValue = "allow";
     lastActionSource = "sharp";
@@ -828,47 +841,66 @@ void updateParkingBuzzer() {
   static bool beepActive = false;
   static unsigned long beepStartedMs = 0;
   static unsigned long nextBeepMs = 0;
-  static uint8_t lastBuzzerZone = 0;
+  static unsigned long lastPauseMs = 0;
+  static bool continuousToneActive = false;
 
   // Buzzer ulaza radi kao parking senzor u autu:
-  // 10-7 cm: t  t  t, 7-4 cm: t t t, 4-2 cm: brze, ispod 2 cm: skoro ttt.
-  if (!config.buzzerEnabled || entryGateOpen || !entryCarPresent || entryDistanceCm <= 0 || entryDistanceCm > 10) {
+  // cim je auto detektovan pisti sporo, zatim sve brze, a na pragu otvaranja pisti neprekidno.
+  if (!config.buzzerEnabled || entryGateOpen || !entryCarPresent || entryDistanceCm <= 0 || entryDistanceCm > config.detectionDistanceCm) {
     noTone(Pins::BUZZER_ENTRY);
     beepActive = false;
     beepStartedMs = 0;
     nextBeepMs = 0;
-    lastBuzzerZone = 0;
+    lastPauseMs = 0;
+    continuousToneActive = false;
     return;
   }
 
-  uint8_t zone;
-  unsigned long beepMs;
-  unsigned long pauseMs;
-
-  if (entryDistanceCm > 7) {
-    zone = 1;
-    beepMs = 70;
-    pauseMs = 650;
-  } else if (entryDistanceCm > 4) {
-    zone = 2;
-    beepMs = 60;
-    pauseMs = 300;
-  } else if (entryDistanceCm > 2) {
-    zone = 3;
-    beepMs = 50;
-    pauseMs = 130;
-  } else {
-    zone = 4;
-    beepMs = 40;
-    pauseMs = 45;
-  }
-
   const unsigned long now = millis();
+  float startDistance = (float)config.detectionDistanceCm;
+  float stopDistance = (float)config.entryOpenDistanceCm;
 
-  if (zone != lastBuzzerZone) {
-    lastBuzzerZone = zone;
-    nextBeepMs = now; // Kada auto predje u blizu zonu, ritam se promeni odmah.
+  if (stopDistance < 1.0f) {
+    stopDistance = 1.0f;
   }
+
+  if (startDistance <= stopDistance) {
+    startDistance = stopDistance + 1.0f;
+  }
+
+  if (entryDistanceCm <= stopDistance) {
+    if (!continuousToneActive) {
+      tone(Pins::BUZZER_ENTRY, 1500);
+    }
+
+    continuousToneActive = true;
+    beepActive = false;
+    beepStartedMs = 0;
+    nextBeepMs = now;
+    lastPauseMs = 0;
+    return;
+  }
+
+  if (continuousToneActive) {
+    noTone(Pins::BUZZER_ENTRY);
+    continuousToneActive = false;
+  }
+
+  float closeness = (startDistance - entryDistanceCm) / (startDistance - stopDistance);
+
+  if (closeness < 0.0f) {
+    closeness = 0.0f;
+  } else if (closeness > 1.0f) {
+    closeness = 1.0f;
+  }
+
+  const unsigned long beepMs = (unsigned long)(70.0f - (25.0f * closeness));
+  const unsigned long pauseMs = (unsigned long)(650.0f - (570.0f * closeness));
+
+  if (!beepActive && lastPauseMs != 0 && pauseMs < lastPauseMs && nextBeepMs > now + pauseMs) {
+    nextBeepMs = now;
+  }
+  lastPauseMs = pauseMs;
 
   if (beepActive) {
     if (now - beepStartedMs >= beepMs) {
@@ -1132,9 +1164,10 @@ float measureExitSharpDistanceCm() {
     return -1;
   }
 
-  // Priblizna formula za Sharp GP2Y0A02YK0F. Senzor je najpouzdaniji od oko 20 do 150 cm.
+  // Priblizna formula za Sharp GP2Y0A02YK0F.
+  // Ne odbacujemo vrednosti po opsegu, da bi se videlo svako realno ocitavanje senzora.
   const float distance = 80.8 * pow(voltage, -1.40);
-  if (distance < 10 || distance > 180) {
+  if (distance <= 0) {
     return -1;
   }
 

@@ -39,10 +39,18 @@
               <b>ULAZ</b>
               <i data-lucide="arrow-up"></i>
             </span>
-            <span class="camera-placeholder">
+            <button class="camera-placeholder" id="openCameraModal" type="button">
               <i data-lucide="camera"></i>
-              Prostor za kameru
-            </span>
+              <span id="cameraButtonText">Prostor za kameru</span>
+            </button>
+            <div class="camera-live" id="cameraLive" hidden>
+              <iframe
+                id="cameraFrame"
+                title="YouTube live kamera ulaza"
+                allow="autoplay; encrypted-media; picture-in-picture"
+                allowfullscreen>
+              </iframe>
+            </div>
             <div class="parking-scene entry-scene" aria-hidden="true">
               <div class="building-wall"><span></span></div>
               <div class="road">
@@ -208,10 +216,14 @@
         <form class="config-form settings-modal-form" id="configForm">
           <div class="settings-section">
             <h3>Rampa 1 (Ulaz 01)</h3>
-            <div class="form-grid">
+            <div class="form-grid three-fields">
               <label class="field" for="entryDetectionDistanceInput">
                 <span>Detekcija (cm)</span>
                 <input id="entryDetectionDistanceInput" type="number" min="5" max="200" step="1" value="25">
+              </label>
+              <label class="field" for="entryOpenDistanceInput">
+                <span>Otvara na (cm)</span>
+                <input id="entryOpenDistanceInput" type="number" min="2" max="200" step="1" value="10">
               </label>
               <label class="field" for="entryGateOpenMsInput">
                 <span>Otvorena (ms)</span>
@@ -289,6 +301,29 @@
           </div>
 
           <button class="primary-button full-width" type="submit">Sacuvaj config</button>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="cameraModal" hidden>
+      <section class="modal-panel camera-modal-panel" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle">
+        <div class="modal-heading">
+          <h2 id="cameraModalTitle">YouTube live kamera</h2>
+          <button class="icon-button" id="closeCameraModal" type="button" aria-label="Zatvori">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+
+        <form class="camera-form" id="cameraForm">
+          <label class="field" for="cameraUrlInput">
+            <span>YouTube live link</span>
+            <input id="cameraUrlInput" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
+          </label>
+          <p class="camera-status" id="cameraStatus">Podrzani su YouTube watch, live, youtu.be i embed linkovi.</p>
+          <div class="camera-actions">
+            <button class="secondary-button" id="clearCameraButton" type="button">Ukloni kameru</button>
+            <button class="primary-button" type="submit">Sacuvaj kameru</button>
+          </div>
         </form>
       </section>
     </div>

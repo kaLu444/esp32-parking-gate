@@ -116,6 +116,17 @@ const elements = {
   openSettingsModal: document.querySelector("#openSettingsModal"),
   settingsModal: document.querySelector("#settingsModal"),
   closeSettingsModal: document.querySelector("#closeSettingsModal"),
+  openCameraModal: document.querySelector("#openCameraModal"),
+  cameraModal: document.querySelector("#cameraModal"),
+  closeCameraModal: document.querySelector("#closeCameraModal"),
+  cameraForm: document.querySelector("#cameraForm"),
+  cameraUrlInput: document.querySelector("#cameraUrlInput"),
+  cameraStatus: document.querySelector("#cameraStatus"),
+  clearCameraButton: document.querySelector("#clearCameraButton"),
+  cameraLive: document.querySelector("#cameraLive"),
+  cameraFrame: document.querySelector("#cameraFrame"),
+  cameraButtonText: document.querySelector("#cameraButtonText"),
+  entryPanel: document.querySelector("#entryPanel"),
   gateArm: document.querySelector("#gateArm"),
   carShape: document.querySelector("#carShape"),
   vehicleTitle: document.querySelector("#vehicleTitle"),
@@ -129,6 +140,7 @@ const elements = {
   activityUpdatedAt: document.querySelector("#activityUpdatedAt"),
   configForm: document.querySelector("#configForm"),
   entryDetectionDistanceInput: document.querySelector("#entryDetectionDistanceInput"),
+  entryOpenDistanceInput: document.querySelector("#entryOpenDistanceInput"),
   entryGateOpenMsInput: document.querySelector("#entryGateOpenMsInput"),
   exitDetectDistanceInput: document.querySelector("#exitDetectDistanceInput"),
   exitOpenDistanceInput: document.querySelector("#exitOpenDistanceInput"),
@@ -156,6 +168,7 @@ let latestConfig = null;
 
 const ESP_ONLINE_STALE_MS = 8000;
 const RGB_COLOR_VALUES = ["blue", "green", "red", "yellow", "white", "off"];
+const CAMERA_STORAGE_PREFIX = "parkingCameraUrl";
 
 function hasFirebaseConfig() {
   const requiredKeys = ["apiKey", "authDomain", "databaseURL", "projectId", "appId"];
@@ -272,6 +285,15 @@ function getEntryDetectionDistanceCm() {
   );
 }
 
+function getEntryOpenDistanceCm() {
+  return clampNumber(
+    firstDefined(elements.entryOpenDistanceInput.value, latestConfig?.entryOpenDistanceCm),
+    10,
+    2,
+    getEntryDetectionDistanceCm()
+  );
+}
+
 function getExitDetectDistanceCm() {
   return clampNumber(
     firstDefined(elements.exitDetectDistanceInput.value, latestConfig?.exitDetectDistanceCm),
@@ -282,9 +304,7 @@ function getExitDetectDistanceCm() {
 }
 
 function getExitOpenDistanceCm() {
-  const detectDistance = getExitDetectDistanceCm();
-  const fallback = Math.min(20, detectDistance);
-  return clampNumber(elements.exitOpenDistanceInput.value, fallback, 5, detectDistance);
+  return clampNumber(elements.exitOpenDistanceInput.value, 20, 5, 150);
 }
 
 function getGateOpenMs(ramp = "entry") {
@@ -311,6 +331,95 @@ function updateColorFields() {
     elements.rgbOpenColorInput,
     elements.rgbDeniedColorInput
   ].forEach(updateColorField);
+}
+
+function getCameraStorageKey() {
+  return `${CAMERA_STORAGE_PREFIX}:${activeDeviceId}`;
+}
+
+function getLocalCameraUrl() {
+  return localStorage.getItem(getCameraStorageKey()) || "";
+}
+
+function setLocalCameraUrl(url) {
+  if (url) {
+    localStorage.setItem(getCameraStorageKey(), url);
+    return;
+  }
+
+  localStorage.removeItem(getCameraStorageKey());
+}
+
+function getYouTubeVideoId(url) {
+  const trimmedUrl = url.trim();
+
+  if (!trimmedUrl) {
+    return "";
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedUrl);
+    const hostname = parsedUrl.hostname.replace(/^www\./, "");
+    const pathParts = parsedUrl.pathname.split("/").filter(Boolean);
+
+    if (hostname === "youtu.be") {
+      return pathParts[0] || "";
+    }
+
+    if (!hostname.endsWith("youtube.com")) {
+      return "";
+    }
+
+    if (parsedUrl.pathname === "/watch") {
+      return parsedUrl.searchParams.get("v") || "";
+    }
+
+    if (pathParts[0] === "live" || pathParts[0] === "embed" || pathParts[0] === "shorts") {
+      return pathParts[1] || "";
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
+}
+
+function getYouTubeEmbedUrl(url) {
+  const videoId = getYouTubeVideoId(url);
+
+  if (!videoId || !/^[a-zA-Z0-9_-]{6,}$/.test(videoId)) {
+    return "";
+  }
+
+  return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0`;
+}
+
+function setCameraStatus(message, state = "") {
+  elements.cameraStatus.textContent = message;
+  elements.cameraStatus.classList.remove("is-error", "is-success");
+
+  if (state) {
+    elements.cameraStatus.classList.add(`is-${state}`);
+  }
+}
+
+function renderCamera(url) {
+  const embedUrl = getYouTubeEmbedUrl(url || "");
+  const hasCamera = Boolean(embedUrl);
+
+  elements.entryPanel.classList.toggle("has-camera", hasCamera);
+  elements.openCameraModal.classList.toggle("is-configured", hasCamera);
+  elements.cameraButtonText.textContent = hasCamera ? "Izmeni kameru" : "Prostor za kameru";
+  elements.cameraLive.hidden = !hasCamera;
+
+  if (hasCamera) {
+    elements.cameraFrame.src = embedUrl;
+    elements.cameraUrlInput.value = url;
+    return;
+  }
+
+  elements.cameraFrame.removeAttribute("src");
+  elements.cameraUrlInput.value = "";
 }
 
 function isEspStateFresh(state) {
@@ -669,6 +778,7 @@ function renderConfig(config) {
     elements.entryAutoToggle.checked = false;
     elements.exitAutoToggle.checked = true;
     elements.entryDetectionDistanceInput.value = 25;
+    elements.entryOpenDistanceInput.value = 10;
     elements.entryGateOpenMsInput.value = 4000;
     elements.exitDetectDistanceInput.value = 30;
     elements.exitOpenDistanceInput.value = 20;
@@ -678,6 +788,7 @@ function renderConfig(config) {
     elements.rgbOpenColorInput.value = "green";
     elements.rgbDeniedColorInput.value = "red";
     updateColorFields();
+    renderCamera(getLocalCameraUrl());
     return;
   }
 
@@ -687,6 +798,12 @@ function renderConfig(config) {
     5,
     200
   );
+  elements.entryOpenDistanceInput.value = clampNumber(
+    config.entryOpenDistanceCm,
+    10,
+    2,
+    getEntryDetectionDistanceCm()
+  );
   elements.entryGateOpenMsInput.value = clampNumber(
     firstDefined(config.entryGateOpenMs, config.gateOpenMs),
     4000,
@@ -694,12 +811,11 @@ function renderConfig(config) {
     30000
   );
   elements.exitDetectDistanceInput.value = clampNumber(config.exitDetectDistanceCm, 30, 5, 150);
-  const exitDetectDistanceCm = getExitDetectDistanceCm();
   elements.exitOpenDistanceInput.value = clampNumber(
     config.exitOpenDistanceCm,
-    Math.min(20, exitDetectDistanceCm),
+    20,
     5,
-    exitDetectDistanceCm
+    150
   );
   elements.exitGateOpenMsInput.value = clampNumber(
     firstDefined(config.exitGateOpenMs, config.gateOpenMs),
@@ -714,6 +830,7 @@ function renderConfig(config) {
 
   elements.entryAutoToggle.checked = Boolean(config.entryAutoEnabled);
   elements.exitAutoToggle.checked = config.exitAutoEnabled !== false;
+  renderCamera(config.cameraYoutubeUrl || getLocalCameraUrl());
   updateColorFields();
 }
 
@@ -781,6 +898,76 @@ function closeSettingsModal() {
   document.body.classList.remove("modal-open");
 }
 
+function openCameraModal() {
+  const currentUrl = latestConfig?.cameraYoutubeUrl || getLocalCameraUrl();
+  elements.cameraUrlInput.value = currentUrl;
+  setCameraStatus("Podrzani su YouTube watch, live, youtu.be i embed linkovi.");
+  elements.cameraModal.hidden = false;
+  document.body.classList.add("modal-open");
+  refreshIcons();
+}
+
+function closeCameraModal() {
+  elements.cameraModal.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
+async function saveCameraLink(event) {
+  event.preventDefault();
+
+  const url = elements.cameraUrlInput.value.trim();
+  const embedUrl = getYouTubeEmbedUrl(url);
+
+  if (!embedUrl) {
+    setCameraStatus("Unesi validan YouTube live link.", "error");
+    return;
+  }
+
+  setLocalCameraUrl(url);
+  renderCamera(url);
+
+  if (!db) {
+    setCameraStatus("Kamera je sacuvana lokalno.", "success");
+    closeCameraModal();
+    return;
+  }
+
+  try {
+    await update(ref(db, devicePath("config")), {
+      cameraYoutubeUrl: url,
+      updatedAt: serverTimestamp(),
+      updatedBy: "web"
+    });
+    setCameraStatus("Kamera je sacuvana.", "success");
+    closeCameraModal();
+  } catch (error) {
+    console.error(error);
+    setCameraStatus("Kamera nije sacuvana u Firebase-u, ali je ostala lokalno.", "error");
+  }
+}
+
+async function clearCameraLink() {
+  setLocalCameraUrl("");
+  renderCamera("");
+
+  if (!db) {
+    closeCameraModal();
+    return;
+  }
+
+  try {
+    await update(ref(db, devicePath("config")), {
+      cameraYoutubeUrl: "",
+      updatedAt: serverTimestamp(),
+      updatedBy: "web"
+    });
+    closeCameraModal();
+  } catch (error) {
+    console.error(error);
+    setCameraStatus("Kamera je uklonjena lokalno, ali Firebase nije azuriran.", "error");
+  }
+}
+
 function detachListeners() {
   activeUnsubscribers.forEach((unsubscribe) => unsubscribe());
   activeUnsubscribers = [];
@@ -792,10 +979,12 @@ function listen(refObject, callback) {
 
 function resetDashboardState() {
   latestState = null;
+  latestConfig = null;
   recentCommands = [];
   todayCommands = [];
   elements.todayCommandCount.textContent = "0";
   renderState(null);
+  renderConfig(null);
   renderCommandLog();
 }
 
@@ -852,6 +1041,7 @@ async function saveConfig(event) {
 
   try {
     const entryDetectionDistanceCm = getEntryDetectionDistanceCm();
+    const entryOpenDistanceCm = getEntryOpenDistanceCm();
     const entryGateOpenMs = getGateOpenMs("entry");
     const exitDetectDistanceCm = getExitDetectDistanceCm();
     const exitOpenDistanceCm = getExitOpenDistanceCm();
@@ -860,6 +1050,7 @@ async function saveConfig(event) {
     await update(ref(db, devicePath("config")), {
       detectionDistanceCm: entryDetectionDistanceCm,
       entryDetectionDistanceCm,
+      entryOpenDistanceCm,
       exitDetectDistanceCm,
       exitOpenDistanceCm,
       gateOpenMs: entryGateOpenMs,
@@ -913,6 +1104,10 @@ function init() {
   elements.exitAutoToggle.addEventListener("change", saveAutoModeConfig);
   elements.openSettingsModal.addEventListener("click", openSettingsModal);
   elements.closeSettingsModal.addEventListener("click", closeSettingsModal);
+  elements.openCameraModal.addEventListener("click", openCameraModal);
+  elements.closeCameraModal.addEventListener("click", closeCameraModal);
+  elements.cameraForm.addEventListener("submit", saveCameraLink);
+  elements.clearCameraButton.addEventListener("click", clearCameraLink);
   elements.exportDailyReportButton.addEventListener("click", exportDailyReport);
   elements.toggleActivitiesButton.addEventListener("click", openActivitiesModal);
   elements.closeActivitiesModal.addEventListener("click", closeActivitiesModal);
@@ -932,6 +1127,11 @@ function init() {
       closeSettingsModal();
     }
   });
+  elements.cameraModal.addEventListener("click", (event) => {
+    if (event.target === elements.cameraModal) {
+      closeCameraModal();
+    }
+  });
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") {
       return;
@@ -943,6 +1143,10 @@ function init() {
 
     if (!elements.settingsModal.hidden) {
       closeSettingsModal();
+    }
+
+    if (!elements.cameraModal.hidden) {
+      closeCameraModal();
     }
   });
   window.setInterval(() => renderEspConnection(latestState), 3000);

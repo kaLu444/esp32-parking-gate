@@ -40,7 +40,7 @@ Operator kroz aplikaciju moze da:
 - pregleda sve aktivnosti u popup prozoru
 - eksportuje dnevni izvestaj u CSV formatu
 
-U aplikaciji postoji i prostor za jednu kameru. Kamera trenutno nije povezana, ali je UI pripremljen da se kasnije doda video prikaz ulaza.
+U aplikaciji postoji prostor za jednu kameru. Kamera se povezuje unosom YouTube live linka, nakon cega se live stream prikazuje direktno u glavnom panelu ulaza.
 
 ## Podesavanja sistema
 
@@ -66,7 +66,7 @@ Svaka rampa ima svoj `Auto` checkbox.
 
 Kada je automatski rezim ukljucen za ulaznu rampu, rampa se automatski otvara kada senzor detektuje vozilo. Kada je automatski rezim iskljucen, operator mora rucno da dozvoli ili zabrani prolaz.
 
-Izlazna rampa je po defaultu zamisljena da radi automatski. Sharp senzor konstatuje vozilo samo u zadatom opsegu, a rampa se otvara tek kada je vozilo dovoljno blizu.
+Izlazna rampa je po defaultu zamisljena da radi automatski. Sharp senzor salje svako validno ocitavanje, a rampa se otvara tek kada je vozilo dovoljno blizu zadatom pragu otvaranja.
 
 Rucno otvaranje rampe preko web aplikacije drzi rampu otvorenom dok operator ponovo ne klikne zatvaranje.
 
